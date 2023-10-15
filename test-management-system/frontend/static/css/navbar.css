@@ -1,0 +1,30 @@
+.navbar-user-actions{
+	display: flex;
+	align-items: baseline;
+}
+
+.navbar-button{
+	margin-left: 10px;
+	margin-right: 10px
+}
+
+.navbar-title{
+	margin-left: 10px;
+	margin-right: 10px;
+	color: white;
+	font-size: 25px;
+}
+
+.navbar a {
+	text-decoration: none;
+}
+
+
+.generated-url-text{
+	word-break: break-all;
+	resize: none;
+}
+
+body {
+	background-color: #FBFBF9;
+}

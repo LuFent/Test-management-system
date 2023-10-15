@@ -1,0 +1,166 @@
+.app-container{
+	margin-top: 10vh;	
+	margin-left: 3vw;
+	margin-right: 3vw;	
+	display: flex;
+	flex-direction: column;
+
+}
+
+.project-info{
+	display: flex;
+
+}
+
+.project-name {
+	margin-right: 1rem;
+	font-size: 1.8rem;
+}
+
+.textare-cell{
+	padding: 0rem 0rem !important;
+}
+
+.error-textarea{
+  	border: 0px;
+  	background-color: var(--body-color);
+}
+
+.error-textarea:focus{
+	border: 0px;
+  background-color: var(--body-color);
+}
+
+.tests-table td{
+	word-break: break-word;
+}
+
+.dropdown-menu {
+  border-color: grey;
+}
+
+.test-step {
+  margin-left: 1rem;
+}
+
+.file-label{
+	white-space: nowrap;
+	word-break: keep-all;
+	--bs-list-group-item-padding-x: 0rem;
+	--bs-list-group-item-padding-y: 0rem;
+	border-bottom: solid lightgrey;
+  border-width: 1px;
+  align-self: stretch;
+}
+
+.test-files-label-container{
+	padding: 1rem;
+}
+
+
+.active-file-label {
+	background-color: lightgrey;
+}
+
+.new-file-label {
+    background-color: #BFDADC
+}
+
+.new-active-file-label {
+    background-color: #699DE1
+}
+
+.version-creation{
+	margin-top: 3vh;
+}
+
+.save-data {
+	align-self: end;
+	display: flex;
+	margin-bottom: 3rem;
+}
+
+.save-data button{
+	margin-left: 2rem;
+}
+
+.table-with-bar-container {
+	display: flex;
+	align-items: flex-start;
+}
+
+.files-list{
+	border-radius: 5px;
+	border: solid grey;
+    border-width: 1px;
+}
+
+.files-bar-container{
+    margin-top: 1vh;
+}
+
+.table-container{
+	margin-top: 1vh;
+	flex-grow: 2;
+	margin-left: 1rem;
+	display: flex;
+	flex-direction: column
+}
+
+
+.version-actions{
+    display: flex;
+}
+
+.version-action {
+    margin-right: 1rem;
+}
+
+.add-new-file-button {
+    margin-top: 0.5rem;
+    width: 100%;
+}
+
+
+.no-break-cells {
+    word-break: keep-all !important;
+}
+
+.test-files-label-container {
+    display: flex;
+    justify-content: space-between;
+}
+
+.steps-closed{
+    display: none;
+}
+
+.steps-opened{
+    display: block;
+}
+
+.dropdown-test{
+    white-space: normal;
+}
+
+.test-files--file-label{
+    margin-right: 1rem;
+}
+
+.number-col {
+    width: 1%;
+}
+
+.steps-list {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+}
+
+.composite-text {
+  display: flex;
+}
+
+.composite-text p{
+  margin-right: 0.5rem;
+}

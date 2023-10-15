@@ -1,0 +1,46 @@
+.projects-list{
+	position: absolute;
+	margin-left: auto;
+	margin-right: auto;
+	margin-top: 10vh;
+	left: 0;
+	right: 0;
+	width: 35vw;
+}
+.add-project-button{
+	background-color: white;
+	font-weight: bold;
+	margin-top: 5px;
+	text-align: left;
+}
+.error-container{
+	margin-left: 10px;
+}
+
+.project-link{
+	text-decoration:none;
+}
+
+.input-block{
+	display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    flex-wrap: nowrap;
+}
+
+.input-block div{
+	margin-right: 2rem;
+}
+
+.input-with-tooltip{
+	display: flex;
+	align-items: center
+}
+
+.grow-max{
+    flex-grow: 2;
+}
+
+.grow-min{
+    flex-grow: 1;
+}

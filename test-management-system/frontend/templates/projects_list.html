@@ -1,0 +1,107 @@
+{% load static %}
+<div class="projects-list">
+  <div class="list-group">
+
+      <button type="button" class="list-group-item list-group-item-action disabled"> <h3>Projects List</h3> </button>
+      {% for project in projects %}
+        <div class="project-link-container">
+          <a class="project-link" href="{% url 'frontend:project_page'  project_id=project.id%}"><button type="button" class="list-group-item list-group-item-action">{{ project.name }}</button></a>
+        </div>
+      {% endfor %}
+      {% if user.is_superuser %}
+        <button type="button" class="btn btn-outline-success add-project-button" data-bs-toggle="modal" data-bs-target="#createProject">+ Create Project</button>
+      {% endif %}
+  </div>
+</div>
+
+<div class="modal fade" id="createProject" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Create Project </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="input-group mb-3">
+        <input type="text" class="form-control" placeholder="Project's name" aria-label="Username" aria-describedby="addon-wrapping" id="newProjectName">
+        </div>
+
+        <div class="error-container">
+         <p class="text-danger field-error-message" id="nameFieldErrorMessage"></p>
+        </div> 
+
+        <div class="input-group mb-3">
+          <input type="text" class="form-control" placeholder="Repository link" aria-label="RepoLink" aria-describedby="addon-wrapping" id="newProjectRepoLink">
+        </div>
+        <div class="error-container">
+         <p class="text-danger field-error-message" id="repoLinkFieldErrorMessage"></p>
+        </div>
+
+        <div class="input-group mb-3">
+          <input type="text" class="form-control" placeholder="Git access token" aria-label="GitAccessToken" aria-describedby="addon-wrapping" id="newProjectGitAccessToken">
+        </div>
+        <div class="error-container">
+         <p class="text-danger field-error-message" id="GitTokenFieldErrorMessage"></p>
+        </div>
+
+        <div class="input-group mb-3">
+          <input type="text" class="form-control" placeholder="Git username (you can leave it blank if you use Project access token" aria-label="GitUsername" aria-describedby="addon-wrapping" id="newProjectGitUsername">
+        </div>
+        <div class="error-container">
+         <p class="text-danger field-error-message" id="GitUsernameFieldErrorMessage"></p>
+        </div>
+
+        <div class="input-group mb-3 input-block">
+          <div class="grow-max">
+            <div class="input-group mb-3 input-with-tooltip">
+              <input type="text" class="form-control" placeholder=".feature files folder (leave blank to pull all test files)" aria-label="filesFolder" aria-describedby="addon-wrapping" id="newProjectFilesFolder">
+            </div>
+
+            <div class="error-container">
+             <p class="text-danger field-error-message" id="filesFolderFieldErrorMessage"></p>
+            </div>
+          </div>
+
+          <div class="grow-min">
+            <div class="input-group mb-3 input-with-tooltip">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="newProjectSmartMode">
+                <label class="form-check-label" for="newProjectSmartMode">
+                  Smart mode
+                </label>
+              </div>
+                <img src="{%  static 'icons/tool-tip.png' %}" type="button"  rel="tooltip" data-toggle="tooltip" data-placement="top" title="Smart mode will analyze what .feature files are covered with auto-testing">
+            </div>
+
+            <div class="error-container">
+             <p class="text-danger field-error-message" id="smartModeFieldErrorMessage"></p>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="input-group mb-3 input-with-tooltip">
+          <input type="text"
+                 class="form-control"
+                 placeholder="Common auto-test folder inside .feature files folder"
+                 aria-label="filesFolder"
+                 aria-describedby="addon-wrapping"
+                 id="newProjectCommonAutoTestsFolder">
+        </div>
+        <div class="error-container">
+         <p class="text-danger field-error-message" id="commonAutoTestsFolderFieldErrorMessage"></p>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="createProjectButton" href="{% url 'api1:create_project' %}">Create</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="{% static 'js/projects_list.js' %}"></script>
+<script type="text/javascript">
+    $(function () {
+        $("[rel='tooltip']").tooltip();
+    });
+</script>

@@ -1,0 +1,37 @@
+{% load static %}
+
+<nav class="navbar navbar-dark bg-primary">
+    <a calss="navbar-title-link" href="{% url 'frontend:index' %}"><p class="navbar-title">Test Managment System</p></a>
+
+    <div class="navbar-user-actions">
+        <h4 class="nav-link">{{ user.get_username }} </h4>
+        <button href="{% url 'user_api:logout' %}" class="btn btn-danger navbar-button" role="button" id="LogoutButton" onclick="PerformLogout()">Log Out</button>
+        {% if user.is_superuser %}
+        <button type="button" class="btn btn-success navbar-button" data-bs-toggle="modal" data-bs-target="#createRegisterLink">Create Sign-Up Link</button>
+        {% endif %}
+    </div>
+</nav>
+
+<!-- Modal -->
+<div class="modal fade" id="createRegisterLink" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Create registration link</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="input-group mb-3">
+        <button class="btn btn-outline-secondary generate-register-link" type="button" id="generate-link" href="{% url 'user_api:generate_register_token' %}">Create</button>
+        <textarea disabled type="text" class="form-control generated-url-text" placeholder="" id="register-link" aria-describedby="button-addon1" rows="4"></textarea>
+      </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="copy-registration-link">Copy</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'js/navbar.js' %}"></script>
+

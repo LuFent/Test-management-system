@@ -1,0 +1,10 @@
+**/.env
+**/.venv
+**/env/
+**/venv
+
+**/db.sqlite3
+**/feature_files
+
+**/node_modules
+**/main.js
