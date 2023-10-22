@@ -1,5 +1,7 @@
 import React, { Component } from "react";
 import SaveData from "./SaveData";
+import EditFileModal from "./EditFileModal";
+
 import { useState } from 'react';
 
 export default function ProjectTittle({
@@ -8,6 +10,9 @@ export default function ProjectTittle({
   getTestData,
   handleTestTextUpdate,
   saveAllTestsFunction,
+  activeVersionId,
+  activeTestFileId,
+  activeTestFileName
 }) {
   if (tests.length == 0) {
     return <span>No tests</span>;
@@ -215,8 +220,14 @@ export default function ProjectTittle({
         </thead>
         <tbody>{tableRows}</tbody>
       </table>
-
-      <SaveData saveAllTests={saveAllTestsFunction} />
+      <div className="file-actions">
+            <SaveData saveAllTests={saveAllTestsFunction} />
+            <EditFileModal
+                activeVersionId={activeVersionId}
+                activeTestFileId={activeTestFileId}
+                activeTestFileName={activeTestFileName}
+            />
+      </div>
     </div>
   );
 }

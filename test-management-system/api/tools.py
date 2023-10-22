@@ -7,11 +7,15 @@ from copy import deepcopy
 from .models import *
 from shutil import rmtree, copyfile
 from django.conf import settings
+from django.db import connection
+
 
 parser = Parser()
+cursor = connection.cursor()
 RESERVED_FILES_POSTFIX = "_res"
 PUSHING_DIR_POSTFIX = "_push"
 NOTHING_TO_COMMIT_MESSAGE = "nothing to commit, working tree clean"
+
 
 def covered_in_single_quotes(text):
     return "'" + text + "'"
@@ -26,11 +30,18 @@ def get_reserve_repo_name(repo_path):
 
 
 def get_unreserved_repo_path(repo_path):
-    return repo_path[:len(repo_path)-len(RESERVED_FILES_POSTFIX)]
+    return repo_path[: len(repo_path) - len(RESERVED_FILES_POSTFIX)]
 
 
 def get_pushing_repo_path(repo_path):
     return repo_path + PUSHING_DIR_POSTFIX
+
+
+def rename_file_hard(old_path, new_path):
+    if os.path.isdir(new_path):
+        os.remove(new_path)
+
+    os.rename(old_path, new_path)
 
 
 def reserve_repo(repo_path):
@@ -53,9 +64,11 @@ def get_repo_path(project_id, version_id):
         settings.DOT_FEATURE_FILES_DIR, str(project_id), str(version_id)
     )
 
+
 def remove_repo(repo_path):
     if os.path.isdir(repo_path):
         rmtree(repo_path)
+
 
 def get_version_creation_error(error_message):
     message = f"""
@@ -81,6 +94,13 @@ def get_files_push_error(error_message):
     return message
 
 
+def bulk_delete(model, ids):
+    table_name = model.objects.model._meta.db_table
+    ids = ",".join([str(id_) for id_ in ids])
+    query = f"DELETE FROM {table_name} WHERE id IN ({ids})"
+    cursor.execute(query)
+
+
 def copy_files_to_dir(files, directory):
     for file in files:
         new_file_path = path.join(directory, path.basename(file.file_path))
@@ -90,11 +110,7 @@ def copy_files_to_dir(files, directory):
 
 
 def get_common_folder_path(repo_path, particular_dir, common_autotests_folder):
-    return os.path.join(
-            repo_path,
-            particular_dir,
-            common_autotests_folder
-        )
+    return os.path.join(repo_path, particular_dir, common_autotests_folder)
 
 
 def get_commit_message(test_files):
@@ -102,8 +118,6 @@ def get_commit_message(test_files):
     file_names = [file.file_name for file in test_files]
     commit_message += ", ".join(file_names)
     return commit_message
-
-
 
 
 def get_substances_regexes(text):
@@ -300,10 +314,7 @@ def clone_features(
     return True, cur_commit
 
 
-def push_files(
-    repo_path,
-    commit_message
-):
+def push_files(repo_path, commit_message):
     repo = Repo(repo_path)
     git_ = repo.git
     try:
@@ -313,7 +324,7 @@ def push_files(
         git_.commit("-m", commit_message)
         git_.push()
     except Exception as e:
-       return False, str(e.stderr)
+        return False, str(e.stderr)
 
     return True, True
 
@@ -359,7 +370,6 @@ def get_features(path, smart_mode, common_autotests_folder):
 
 def get_features_from_file(path, file_name, smart_mode, common_autotests_folder):
     features = []
-    feature_ext = ".feature"
     dirname = None
     full_filename = None
     dirnames = None
@@ -454,7 +464,7 @@ def get_updated_tests_objcts(features, version):
     return updated_test_files, updated_project_tests, updated_test_steps
 
 
-def get_new_tests_objcts(features, version):
+def get_new_tests_objects(features, version):
     new_test_files = []
     new_project_tests = []
     new_test_steps = []
@@ -487,3 +497,91 @@ def get_new_tests_objcts(features, version):
                 new_test_steps.append(step)
 
     return new_test_files, new_project_tests, new_test_steps
+
+
+def get_deleted_tests_objects(features, version):
+    deleted_test_files = []
+    deleted_project_tests = []
+    deleted_test_steps = []
+
+    keywords = {
+        "Outcome": "1",
+        "Conjunction": "2",
+        "Unknown": "3",
+        "Action": "4",
+        "Context": "5",
+    }
+
+    for file in version.test_files.all():
+        deleted_test_files.append(file.id)
+        for test in file.tests.all():
+            deleted_project_tests.append(test.id)
+            for step in test.steps.all():
+                deleted_test_steps.append(step.id)
+
+    for feature in features:
+        test_file = version.test_files.filter(file_path=feature["file_path"])
+        if test_file.exists():
+            test_file = test_file.first()
+            deleted_test_files.remove(test_file.id)
+        else:
+            continue
+        for scenario in feature["scenarios"]:
+            project_test = test_file.tests.filter(test_name=scenario["name"])
+            if project_test.exists():
+                project_test = project_test.first()
+                deleted_project_tests.remove(project_test.id)
+            else:
+                continue
+
+            for step in scenario["steps"]:
+                keyword = keywords.get(step["keywordType"], "2")
+                full_text = step["keyword"] + step["text"]
+                step_ = project_test.steps.filter(keyword=keyword, text=full_text)
+                if step_.exists():
+                    step_ = step_.first()
+                    deleted_test_steps.remove(step_.id)
+                else:
+                    continue
+
+    return deleted_test_files, deleted_project_tests, deleted_test_steps
+
+
+def get_deleted_tests_objects_from_file(features, test_file):
+    deleted_project_tests = []
+    deleted_test_steps = []
+
+    keywords = {
+        "Outcome": "1",
+        "Conjunction": "2",
+        "Unknown": "3",
+        "Action": "4",
+        "Context": "5",
+    }
+
+    for test in test_file.tests.all():
+        deleted_project_tests.append(test.id)
+        for step in test.steps.all():
+            deleted_test_steps.append(step.id)
+
+    feature = features[0]
+
+    for scenario in feature["scenarios"]:
+        project_test = test_file.tests.filter(test_name=scenario["name"])
+        if project_test.exists():
+            project_test = project_test.first()
+            deleted_project_tests.remove(project_test.id)
+        else:
+            continue
+
+        for step in scenario["steps"]:
+            keyword = keywords.get(step["keywordType"], "2")
+            full_text = step["keyword"] + step["text"]
+            step_ = project_test.steps.filter(keyword=keyword, text=full_text)
+            if step_.exists():
+                step_ = step_.first()
+                deleted_test_steps.remove(step_.id)
+            else:
+                continue
+
+    return deleted_project_tests, deleted_test_steps

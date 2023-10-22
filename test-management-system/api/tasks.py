@@ -6,7 +6,7 @@ from .tools import (
     clone_features,
     get_features,
     get_updated_tests_objcts,
-    get_new_tests_objcts,
+    get_new_tests_objects,
     reserve_repo,
     unreserve_repo,
     get_version_creation_error,
@@ -17,7 +17,7 @@ from .tools import (
     push_files,
     remove_repo,
     get_common_folder_path,
-    get_commit_message
+    get_commit_message,
 )
 from django.conf import settings
 from os.path import join
@@ -41,9 +41,9 @@ def create_version(repo_path, username, token, branch, commit, repo_url, version
     common_autotests_folder = project.common_autotests_folder
 
     if smart_mode and particular_dir and common_autotests_folder:
-        common_autotests_folder = get_common_folder_path(repo_path,
-                                                         particular_dir,
-                                                         common_autotests_folder)
+        common_autotests_folder = get_common_folder_path(
+            repo_path, particular_dir, common_autotests_folder
+        )
     try:
         status, data = clone_features(
             repo_url=repo_url,
@@ -73,7 +73,7 @@ def create_version(repo_path, username, token, branch, commit, repo_url, version
         version.save()
     try:
         features = get_features(repo_path, smart_mode, common_autotests_folder)
-        new_test_files, new_project_tests, new_test_steps = get_new_tests_objcts(
+        new_test_files, new_project_tests, new_test_steps = get_new_tests_objects(
             features, version
         )
     except Exception as e:

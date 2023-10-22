@@ -109,8 +109,7 @@ export default function TestFilesBar({
       }
     }
   }
-
-  const activeTests = testFiles.filter((t) => t.id == activeTestFileId)[0].tests;
+  const activeTests = activeTestFile.tests;
 
   return (
     <div>
@@ -131,6 +130,9 @@ export default function TestFilesBar({
           handleTestTextUpdate={handleTestTextUpdate}
           getTestData={getTestData}
           saveAllTestsFunction={saveAllTests}
+          activeVersionId={activeVersionId}
+          activeTestFileId={activeTestFileId}
+          activeTestFileName={activeTestFile.file_name}
         />
       </div>
     </div>

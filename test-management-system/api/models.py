@@ -11,9 +11,7 @@ UserModel = get_user_model()
 
 
 class Project(models.Model):
-    name = models.CharField(
-        max_length=100, verbose_name="Project name", unique=True
-    )
+    name = models.CharField(max_length=100, verbose_name="Project name", unique=True)
 
     creation_date = models.DateField("Creation date")
 
@@ -110,13 +108,11 @@ class TestFile(models.Model):
         verbose_name="Project Version",
     )
 
-    manually_created = models.BooleanField(
-        default=False
-    )
+    manually_created = models.BooleanField(default=False)
+
     @property
     def file_name(self):
         return os.path.splitext(ntpath.basename(self.file_path))[0]
-
 
     class Meta:
         unique_together = (

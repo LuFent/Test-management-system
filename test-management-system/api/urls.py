@@ -21,5 +21,7 @@ urlpatterns = [
     path("update_test/", UpdateProjectTest.as_view(), name="update_test"),
     path("delete_version/<id>/", DeleteVersion.as_view(), name="delete_version"),
     path("create_file/", CreateFile.as_view(), name="create_file"),
-    path("push_files/", PushFiles.as_view(), name="push_files")
+    path("push_files/", PushFiles.as_view(), name="push_files"),
+    path("get_file_text/<file_id>/", GetFileText.as_view(), name="get_file_text"),
+    path("update_file/<file_id>/", UpdateFile.as_view(), name="update_file"),
 ]

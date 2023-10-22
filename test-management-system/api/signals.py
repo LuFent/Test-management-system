@@ -6,6 +6,7 @@ import os
 from django.conf import settings
 from .tools import get_reserve_repo_name, get_repo_path
 
+
 @receiver(pre_delete, sender=TestFile)
 def delete_file(sender, instance, *args, **kwargs):
     try:
@@ -17,9 +18,7 @@ def delete_file(sender, instance, *args, **kwargs):
 
 @receiver(pre_delete, sender=ProjectVersion)
 def delete_repo(sender, instance, *args, **kwargs):
-    repo_path = get_repo_path(
-        instance.project.id, instance.id
-    )
+    repo_path = get_repo_path(instance.project.id, instance.id)
     if os.path.isdir(get_reserve_repo_name(repo_path)):
         try:
             rmtree(get_reserve_repo_name(repo_path))
@@ -29,5 +28,3 @@ def delete_repo(sender, instance, *args, **kwargs):
         rmtree(repo_path)
     except Exception:
         pass
-
-

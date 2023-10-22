@@ -9,20 +9,37 @@ from .serializers import (
     ProjectTestSerializer,
     ProjectTestStatusSerializer,
     SmallVersionSerializer,
-    NewFileSerializer
+    NewFileSerializer,
+    FileNameAndTextSerializer,
 )
 from datetime import date
 from .models import Project, ProjectVersion, TestFile, ProjectTest, TestStep
-from rest_framework.generics import RetrieveAPIView, UpdateAPIView, DestroyAPIView, CreateAPIView
+from rest_framework.generics import (
+    RetrieveAPIView,
+    UpdateAPIView,
+    DestroyAPIView,
+    CreateAPIView,
+)
 from django.db import connection, reset_queries
 from django.db.models import Count, Q, Sum, F, ExpressionWrapper, DecimalField
 from django.db.models import Prefetch
 from .tasks import create_version, update_version, push_test_files
 from django.conf import settings
+from pprint import pprint
 import os
 from rest_framework import status
-from django.shortcuts import get_object_or_404
-from .tools import get_repo_path, get_features_from_file, get_new_tests_objcts, get_common_folder_path
+from django.shortcuts import get_object_or_404, HttpResponse
+from .tools import (
+    get_repo_path,
+    get_features_from_file,
+    get_new_tests_objects,
+    get_common_folder_path,
+    rename_file_hard,
+    get_updated_tests_objcts,
+    get_deleted_tests_objects_from_file,
+    bulk_delete,
+)
+
 
 class CreateProject(APIView):
     permission_classes = [
@@ -61,9 +78,7 @@ class CreateVersion(APIView):
         repo_url = project.repo_url
         username = project.git_username
         token = project.git_access_key
-        repo_path = get_repo_path(
-            project.id, version.id
-        )
+        repo_path = get_repo_path(project.id, version.id)
         try:
             create_version.delay(
                 repo_path=repo_path,
@@ -98,9 +113,7 @@ class UpdateVersion(APIView):
         token = project.git_access_key
         branch = version.branch
 
-        repo_path = get_repo_path(
-            project.id, version.id
-        )
+        repo_path = get_repo_path(project.id, version.id)
 
         try:
             update_version.delay(
@@ -133,9 +146,7 @@ class PushFiles(APIView):
         branch = version.branch
         repo_url = project.repo_url
 
-        repo_path = get_repo_path(
-            project.id, version.id
-        )
+        repo_path = get_repo_path(project.id, version.id)
 
         try:
             push_test_files.delay(
@@ -158,6 +169,14 @@ class GetProject(RetrieveAPIView):
     serializer_class = GetProjectSerializer
     lookup_field = "id"
     queryset = Project.objects.all()
+
+
+class GetFileText(APIView):
+    def get(self, request, file_id):
+        file = get_object_or_404(TestFile, id=file_id)
+        file_text = open(file.file_path, "rb").read()
+        reponse = HttpResponse(file_text, content_type="text/plain; charset=UTF-8")
+        return reponse
 
 
 class GetVersion(RetrieveAPIView):
@@ -250,7 +269,7 @@ class GetProjectWithLastVersion(APIView):
             .first()
         )
         version_data = BigVersionSerializer(instance=version).data
-        versions = sorted(project_data["versions"], key = lambda v: v["id"])
+        versions = sorted(project_data["versions"], key=lambda v: v["id"])
         versions.pop(-1)
         versions.append(version_data)
         project_data["versions"] = versions
@@ -325,9 +344,9 @@ class CreateFile(CreateAPIView):
         file_name = data["file_name"]
 
         if smart_mode and particular_dir and common_autotests_folder:
-            common_autotests_folder = get_common_folder_path(repo_path,
-                                                             particular_dir,
-                                                             common_autotests_folder)
+            common_autotests_folder = get_common_folder_path(
+                repo_path, particular_dir, common_autotests_folder
+            )
 
         if os.path.isdir(file_path):
             os.remove(file_path)
@@ -338,27 +357,32 @@ class CreateFile(CreateAPIView):
 
         except Exception:
             os.remove(file_path)
-            return Response({"message": "Unable to create file"},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"message": "Unable to create file"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
-            features = get_features_from_file(repo_path, file_name, project.smart_mode, common_autotests_folder)
+            features = get_features_from_file(
+                repo_path, file_name, project.smart_mode, common_autotests_folder
+            )
         except Exception:
             os.remove(file_path)
-            return Response({"file_text": "Invalid file text"},
-                        status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"file_text": "Invalid file text"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         if not features:
             os.remove(file_path)
-            return Response({"file_text": "Invalid file text"},
-                        status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"file_text": "Invalid file text"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             (
                 new_test_files,
                 new_project_tests,
                 new_test_steps,
-            ) = get_new_tests_objcts(features, version)
+            ) = get_new_tests_objects(features, version)
             new_test_file = new_test_files[0]
             new_test_file.manually_created = True
             TestFile.objects.bulk_create(new_test_files)
@@ -366,8 +390,121 @@ class CreateFile(CreateAPIView):
             TestStep.objects.bulk_create(new_test_steps)
         except Exception:
             os.remove(file_path)
-            return Response({"file_text": "Invalid file text"},
-                        status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"file_text": "Invalid file text"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response(
+            serializer.data, status=status.HTTP_201_CREATED, headers=headers
+        )
+
+
+class UpdateFile(APIView):
+    def put(self, request, file_id, *args, **kwargs):
+        data = request.data
+        test_file = get_object_or_404(TestFile, id=file_id)
+        serializer = FileNameAndTextSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        if not data:
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        version_id = test_file.project_version.id
+        version = (
+            ProjectVersion.objects.filter(id=version_id)
+            .prefetch_related(
+                Prefetch(
+                    "test_files",
+                    queryset=TestFile.objects.prefetch_related(
+                        Prefetch(
+                            "tests",
+                            queryset=ProjectTest.objects.prefetch_related("steps"),
+                        )
+                    ),
+                )
+            )
+            .first()
+        )
+
+        project = version.project
+        smart_mode = project.smart_mode
+        particular_dir = project.files_folder
+        common_autotests_folder = project.common_autotests_folder
+
+        repo_path = get_repo_path(project.id, version.id)
+        files_folder = os.path.join(repo_path, project.files_folder)
+        old_path = None
+
+        if "file_name" in data:
+            new_file_path = os.path.join(files_folder, data["file_name"])
+            if version.test_files.filter(file_path=new_file_path).exists():
+                return Response(
+                    {"file_name": "File with such name already exists in this version"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            old_path = test_file.file_path
+            rename_file_hard(test_file.file_path, new_file_path)
+            test_file.file_path = new_file_path
+            test_file.save()
+
+        if "file_text" in data:
+            file_path = test_file.file_path
+            if smart_mode and particular_dir and common_autotests_folder:
+                common_autotests_folder = get_common_folder_path(
+                    repo_path, particular_dir, common_autotests_folder
+                )
+            with open(file_path, "r") as f:
+                old_text = f.read()
+
+            with open(file_path, "w") as f:
+                f.write(data["file_text"])
+
+            try:
+                file_name = test_file.file_name + ".feature"
+                features = get_features_from_file(
+                    repo_path, file_name, project.smart_mode, common_autotests_folder
+                )
+                (
+                    updated_test_files,
+                    updated_project_tests,
+                    updated_test_steps,
+                ) = get_updated_tests_objcts(features, version)
+
+                (
+                    deleted_project_tests,
+                    deleted_test_steps,
+                ) = get_deleted_tests_objects_from_file(features, test_file)
+
+            except Exception as e:
+                with open(file_path, "w") as f:
+                    f.write(old_text)
+                if old_path:
+                    rename_file_hard(new_file_path, old_path)
+
+                return Response(
+                    {"file_text": "Invalid file text"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not features:
+                with open(file_path, "w") as f:
+                    f.write(old_text)
+                if old_path:
+                    rename_file_hard(new_file_path, old_path)
+                return Response(
+                    {"file_text": "Invalid file text"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            ProjectTest.objects.bulk_create(updated_project_tests)
+            TestStep.objects.bulk_create(updated_test_steps)
+            if deleted_test_steps:
+                bulk_delete(TestStep, deleted_test_steps)
+            if deleted_project_tests:
+                bulk_delete(ProjectTest, deleted_project_tests)
+
+        test_file.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)

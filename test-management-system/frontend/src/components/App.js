@@ -314,16 +314,6 @@ class App extends Component {
               activeVersionId={this.state.activeVersionId}
               onVersionClick={this.makeVersionActive}
             />
-
-            <div className="version-creation">
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={() => this.deleteVersion(this.state.activeVersionId)}
-              >
-                Delete this version
-              </button>
-            </div>
           </div>
         );
       }

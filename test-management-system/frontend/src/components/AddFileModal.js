@@ -50,6 +50,7 @@ export default function AddFileModal(activeVersionId) {
     xhr.onload = function () {
       let FileData = JSON.parse(xhr.responseText);
       if (xhr.status == 201) {
+
         closeModal.current.click();
         window.location.reload(false);
         return

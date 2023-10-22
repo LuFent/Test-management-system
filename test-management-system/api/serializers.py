@@ -1,4 +1,10 @@
-from rest_framework.serializers import ModelSerializer, ValidationError, IntegerField, CharField
+from rest_framework.serializers import (
+    ModelSerializer,
+    ValidationError,
+    IntegerField,
+    CharField,
+    Serializer,
+)
 from .models import *
 from django.core.validators import URLValidator
 from pathvalidate import sanitize_filename
@@ -118,14 +124,16 @@ class ProjectTestStatusSerializer(ModelSerializer):
 
 class NewFileSerializer(ModelSerializer):
     file_name = CharField()
-    file_text = CharField(style={'base_template': 'textarea.html'})
+    file_text = CharField(style={"base_template": "textarea.html"})
     extension_delimiter = "."
     features_extension = extension_delimiter + "feature"
 
     def validate_file_name(self, value):
-        if value != sanitize_filename(value) or value.count(self.extension_delimiter) > 1:
-            raise ValidationError({"file_name": "Invalid file name"})
-
+        if (
+            value != sanitize_filename(value)
+            or value.count(self.extension_delimiter) > 1
+        ):
+            raise ValidationError("Invalid file name")
         return value
 
     def validate(self, data):
@@ -141,13 +149,13 @@ class NewFileSerializer(ModelSerializer):
         version = data["project_version"]
         project = version.project
 
-        repo_path = get_repo_path(
-            project.id, version.id
-        )
+        repo_path = get_repo_path(project.id, version.id)
         file_path = os.path.join(repo_path, project.files_folder, filename)
 
         if version.test_files.filter(file_path=file_path).exists():
-            raise ValidationError({"file_name": "File with such name already exists in this version"})
+            raise ValidationError(
+                {"file_name": "File with such name already exists in this version"}
+            )
 
         data["file_path"] = file_path
         data["repo_path"] = repo_path
@@ -157,3 +165,25 @@ class NewFileSerializer(ModelSerializer):
     class Meta:
         model = TestFile
         fields = ["project_version", "file_text", "file_name"]
+
+
+class FileNameAndTextSerializer(Serializer):
+    file_name = CharField(required=False)
+    file_text = CharField(required=False, style={"base_template": "textarea.html"})
+    extension_delimiter = "."
+    features_extension = extension_delimiter + "feature"
+
+    def validate_file_name(self, value):
+        if (
+            value != sanitize_filename(value)
+            or value.count(self.extension_delimiter) > 1
+        ):
+            raise ValidationError("Invalid file name")
+
+        _, file_extension = os.path.splitext(value)
+        if not file_extension:
+            value += self.features_extension
+        elif file_extension != self.features_extension:
+            raise ValidationError("Invalid file extension")
+
+        return value

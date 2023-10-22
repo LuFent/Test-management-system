@@ -164,3 +164,12 @@
 .composite-text p{
   margin-right: 0.5rem;
 }
+
+.file-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.file-action {
+    margin-left: 1rem;
+}
