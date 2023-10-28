@@ -34,12 +34,15 @@ class ProjectTestSerializer(ModelSerializer):
             "id",
             "steps",
             "status",
-            "text",
+            "comment",
             "test_name",
             "steps_amount",
             "covered_steps_amount",
             "outcome_steps_amount",
             "covered_outcome_steps_amount",
+            "start_line",
+            "last_line",
+            "needs_expanded_view",
         ]
 
 
@@ -107,6 +110,9 @@ class CreateProjectSerializer(ModelSerializer):
                 }
             )
 
+        if not attrs.get("git_username", None):
+            attrs["git_username"] = attrs["git_access_key"]
+
         return attrs
 
 
@@ -119,7 +125,7 @@ class VersionSerializer(ModelSerializer):
 class ProjectTestStatusSerializer(ModelSerializer):
     class Meta:
         model = ProjectTest
-        fields = ["id", "text", "status"]
+        fields = ["id", "comment", "status"]
 
 
 class NewFileSerializer(ModelSerializer):

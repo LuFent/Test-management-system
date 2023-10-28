@@ -38,6 +38,7 @@ from .tools import (
     get_updated_tests_objcts,
     get_deleted_tests_objects_from_file,
     bulk_delete,
+    check_for_similar_test_names,
 )
 
 
@@ -283,7 +284,7 @@ class UpdateProjectTest(UpdateAPIView):
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.status = request.data.get("status")
-        instance.text = request.data.get("text")
+        instance.comment = request.data.get("comment")
         instance.save()
 
         serializer = self.get_serializer(instance, data=request.data, partial=True)
@@ -312,9 +313,9 @@ class UpdateProjectTest(APIView):
 
         for test, test_data in zip(tests, validated_data):
             test.status = test_data["status"]
-            test.text = test_data["text"]
+            test.comment = test_data["comment"]
 
-        ProjectTest.objects.bulk_update(tests, ["status", "text"])
+        ProjectTest.objects.bulk_update(tests, ["status", "comment"])
         return Response({"message": "ok"})
 
 
@@ -375,6 +376,14 @@ class CreateFile(CreateAPIView):
             os.remove(file_path)
             return Response(
                 {"file_text": "Invalid file text"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        duplicated_test_names = check_for_similar_test_names(features[0])
+        if duplicated_test_names:
+            exception_text = f"It's can't be identical tests names: {duplicated_test_names[0]}"
+            os.remove(file_path)
+            return Response(
+                {"file_text": exception_text}, status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
@@ -462,13 +471,19 @@ class UpdateFile(APIView):
             with open(file_path, "w") as f:
                 f.write(data["file_text"])
 
+            exception_text = '"file_text": "Invalid file text"'
             try:
                 file_name = test_file.file_name + ".feature"
                 features = get_features_from_file(
                     repo_path, file_name, project.smart_mode, common_autotests_folder
                 )
+                duplicated_test_names = check_for_similar_test_names(features[0])
+                if duplicated_test_names:
+                    exception_text = f"It's can't be identical tests names: {duplicated_test_names[0]}"
+                    raise Exception()
                 (
                     updated_test_files,
+                    new_project_tests,
                     updated_project_tests,
                     updated_test_steps,
                 ) = get_updated_tests_objcts(features, version)
@@ -479,15 +494,15 @@ class UpdateFile(APIView):
                 ) = get_deleted_tests_objects_from_file(features, test_file)
 
             except Exception as e:
-                with open(file_path, "w") as f:
-                    f.write(old_text)
-                if old_path:
-                    rename_file_hard(new_file_path, old_path)
+                    with open(file_path, "w") as f:
+                        f.write(old_text)
+                    if old_path:
+                        rename_file_hard(new_file_path, old_path)
 
-                return Response(
-                    {"file_text": "Invalid file text"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                    return Response(
+                        {"file_text": exception_text},
+                        status=status.HTTP_400_BAD_REQUEST,
+                   )
 
             if not features:
                 with open(file_path, "w") as f:
@@ -499,7 +514,8 @@ class UpdateFile(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            ProjectTest.objects.bulk_create(updated_project_tests)
+            ProjectTest.objects.bulk_create(new_project_tests)
+            ProjectTest.objects.bulk_update(updated_project_tests, ["last_line", "start_line"])
             TestStep.objects.bulk_create(updated_test_steps)
             if deleted_test_steps:
                 bulk_delete(TestStep, deleted_test_steps)
@@ -508,3 +524,18 @@ class UpdateFile(APIView):
 
         test_file.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class GetTestText(APIView):
+    def get(self, request, test_id):
+        test = get_object_or_404(ProjectTest, id=test_id)
+        file_path = test.file.file_path
+        start_line, last_line = test.start_line, test.last_line
+        test_text = ""
+        with open(file_path, "r") as f:
+            file_text = f.readlines()
+            for line_number in range(start_line - 1, last_line + 1):
+                test_text += file_text[line_number]
+
+        data = {"text": test_text, "name": test.test_name}
+        return Response(data, status=status.HTTP_200_OK)

@@ -23,6 +23,8 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
+    "@codemirror/legacy-modes": "^6.3.3",
+    "@uiw/react-codemirror": "^4.21.20",
     "jquery": "^3.7.0"
   }
 }

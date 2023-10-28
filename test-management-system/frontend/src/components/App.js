@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import ProjectTittle from "./ProjectTittle";
 import TestFilesBar from "./TestFilesBar";
 import AddVersionModal from "./AddVersionModal";
-
+import ShowFileTextModal from "./ShowFileTextModal";
 
 
 function getCookie(name) {
@@ -34,6 +34,8 @@ class App extends Component {
       loaded: false,
       newVersionFormData: undefined,
       testsStates: undefined,
+      openedTestName: undefined,
+      openedTestText: undefined,
     };
     this.updatedTestsIds = [];
   }
@@ -41,6 +43,27 @@ class App extends Component {
   getTestData = (testId) => {
     return this.state.testsStates[testId];
   };
+
+  openShowTestModal = (testId) => {
+    let xhr = new XMLHttpRequest();
+    const url = "/api/get_test_text/" + testId + "/";
+    xhr.open("GET", url);
+    xhr.setRequestHeader("X-CSRFToken", getCookie("csrftoken"));
+    xhr.setRequestHeader("Content-Type", "application/json");
+
+    xhr.onload = function () {
+        if (xhr.status >= 400) {
+          return;
+        }
+        const testData = JSON.parse(xhr.responseText);
+        this.setState({
+            openedTestName: testData.name,
+            openedTestText: testData.text
+        });
+
+    }.bind(this);
+    xhr.send();
+  }
 
   handleTestStatusUpdate = (testId, newStatus) => {
     if (!this.updatedTestsIds.includes(testId)) {
@@ -61,12 +84,12 @@ class App extends Component {
     });
   };
 
-  handleTestTextUpdate = (testId, event) => {
+  handleTestCommentUpdate = (testId, event) => {
     if (!this.updatedTestsIds.includes(testId)) {
       this.updatedTestsIds.push(testId);
     }
     let testsStates = this.state.testsStates;
-    testsStates[testId].text = event.target.value;
+    testsStates[testId].comment = event.target.value;
     testsStates[testId].file = this.state.activeTestFileId;
     testsStates[testId].version = this.state.activeVersionId;
 
@@ -86,7 +109,7 @@ class App extends Component {
       data.push({
         id: testId,
         status: this.state.testsStates[testId].status,
-        text: this.state.testsStates[testId].text,
+        comment: this.state.testsStates[testId].comment,
       });
     }
     let xhr = new XMLHttpRequest();
@@ -119,7 +142,7 @@ class App extends Component {
       if (!(test.id in testsStates)) {
         testsStates[test.id] = {
           status: test.status,
-          text: test.text,
+          comment: test.comment,
         };
       }
     }
@@ -256,7 +279,7 @@ class App extends Component {
             if (!(test.id in testsStates)) {
               testsStates[test.id] = {
                 status: test.status,
-                text: test.text,
+                comment: test.comment,
               };
             }
           }
@@ -275,6 +298,7 @@ class App extends Component {
   }
 
   render() {
+
     if (!this.state.loaded) {
       return <span>Loading</span>;
     }
@@ -286,7 +310,6 @@ class App extends Component {
         </div>
       );
     }
-
     let version = this.getActiveVersion();
     let activeTestFiles = version.test_files;
 
@@ -334,10 +357,15 @@ class App extends Component {
             activeTestFileId={this.state.activeTestFileId}
             onTestFileClick={this.handleTestFileClick}
             handleTestStatusUpdate={this.handleTestStatusUpdate}
-            handleTestTextUpdate={this.handleTestTextUpdate}
+            handleTestCommentUpdate={this.handleTestCommentUpdate}
             getTestData={this.getTestData}
             saveAllTests={this.saveAllTests}
+            openShowTestModal={this.openShowTestModal}
           />
+        <ShowFileTextModal
+            openedTestName={this.state.openedTestName}
+            openedTestText={this.state.openedTestText}
+        />
         </div>
       );
     }

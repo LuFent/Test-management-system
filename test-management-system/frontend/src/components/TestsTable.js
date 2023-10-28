@@ -8,11 +8,12 @@ export default function ProjectTittle({
   tests,
   handleTestStatusUpdate,
   getTestData,
-  handleTestTextUpdate,
+  handleTestCommentUpdate,
   saveAllTestsFunction,
   activeVersionId,
   activeTestFileId,
-  activeTestFileName
+  activeTestFileName,
+  openShowTestModal
 }) {
   if (tests.length == 0) {
     return <span>No tests</span>;
@@ -32,6 +33,8 @@ export default function ProjectTittle({
         }
         setOpenedStepsTests(NewOpenedStepsTests);
   }
+
+  tests.sort((a, b) => {return b["start_line"] - a["start_line"]})
   for (let testIndex = tests.length - 1; testIndex >= 0; testIndex--) {
     const test = tests[testIndex];
     const testState = getTestData(test.id);
@@ -97,9 +100,9 @@ export default function ProjectTittle({
       );
     }
 
-    let testText = testState.text;
-    if (testText === null) {
-      testText = "";
+    let testComment = testState.comment;
+    if (testComment === null) {
+      testComment = "";
     }
     testNumber++;
     let testName = test.test_name;
@@ -141,6 +144,19 @@ export default function ProjectTittle({
       autoTestCoveredOutcomeSteps += "-";
     }
     let stepsElements = undefined;
+    steps.push(
+      <li key={steps.length + 1}>
+        <div className="expand-container">
+            <p><a type="button"
+                  className="link-opacity-100-hover test-step"
+                  data-bs-toggle="modal"
+                  data-bs-target="#showFileTextModal"
+                  onClick={() => openShowTestModal(test.id)}
+                  >Expand</a></p>
+        </div>
+      </li>
+      );
+
 
     if (openedStepsTests.includes(test.id)) {
         stepsElements = (
@@ -160,6 +176,7 @@ export default function ProjectTittle({
         </div>
         )
     }
+
     let textAreaId = "FormControlTextarea" + test.id;
     tableRows.push(
       <tr key={test.id}>
@@ -186,10 +203,10 @@ export default function ProjectTittle({
         <td className="textare-cell">
           <textarea
             className="form-control error-textarea"
-            value={testText}
+            value={testComment}
             id={textAreaId}
             rows="3"
-            onChange={(e) => handleTestTextUpdate(test.id, e)}
+            onChange={(e) => handleTestCommentUpdate(test.id, e)}
           ></textarea>
         </td>
       </tr>

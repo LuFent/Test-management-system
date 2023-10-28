@@ -8,7 +8,7 @@ from .models import *
 from shutil import rmtree, copyfile
 from django.conf import settings
 from django.db import connection
-
+from pprint import pprint
 
 parser = Parser()
 cursor = connection.cursor()
@@ -70,6 +70,13 @@ def remove_repo(repo_path):
         rmtree(repo_path)
 
 
+def shift(seq, n):
+    if not seq:
+        return []
+    n = n % len(seq)
+    return seq[n:] + seq[:n]
+
+
 def get_version_creation_error(error_message):
     message = f"""
     Couldn't create version due to:
@@ -118,6 +125,38 @@ def get_commit_message(test_files):
     file_names = [file.file_name for file in test_files]
     commit_message += ", ".join(file_names)
     return commit_message
+
+
+def check_for_similar_test_names(features):
+    features = [scenario["name"] for scenario in features["scenarios"]]
+    duplicates = []
+    seen = set()
+    for f in features:
+        if f in seen:
+            duplicates.append(f)
+        else:
+            seen.add(f)
+
+    return duplicates
+
+
+def get_test_text_position(scenario):
+    last_line = -1
+
+    for step in scenario["steps"]:
+        if step["location"]["line"] > last_line:
+            last_line = step["location"]["line"]
+
+    examples = scenario.get("examples", None)
+    if examples:
+        for example in examples:
+            table = example.get("tableBody", None)
+            if not table:
+                continue
+            for cells in table:
+                if cells["location"]["line"] > last_line:
+                    last_line = cells["location"]["line"]
+    return scenario["location"]["line"], last_line
 
 
 def get_substances_regexes(text):
@@ -221,10 +260,13 @@ def parse_feature_file(file_path):
     file_scenarios = gherkin_document["feature"]["children"]
 
     data = {"feature": feature_name, "scenarios": []}
+
     for scenario in file_scenarios:
-        scenario = scenario.get("scenario")
+        scenario = scenario.get("scenario", None)
         if not scenario:
             continue
+
+        start_line, last_line = get_test_text_position(scenario)
 
         scenario_name, scenario_type, steps = (
             scenario.get("name"),
@@ -241,6 +283,7 @@ def parse_feature_file(file_path):
                 "has_auto_test": False,
                 "keyword": step["keyword"],
                 "keywordType": step["keywordType"],
+                "number": step["id"]
             }
             for step in steps
         ]
@@ -251,6 +294,8 @@ def parse_feature_file(file_path):
                 "type": scenario_type,
                 "steps": scenario_steps,
                 "has_auto_test": False,
+                "start_line": start_line,
+                "last_line": last_line
             }
         )
 
@@ -353,7 +398,7 @@ def get_features(path, smart_mode, common_autotests_folder):
                     feature_data = fetch_with_autotests_check(feature_data, js_dir)
                 features.append(feature_data)
 
-            except Exception:
+            except Exception as e:
                 continue
 
     features_ = deepcopy(features)
@@ -373,6 +418,7 @@ def get_features_from_file(path, file_name, smart_mode, common_autotests_folder)
     dirname = None
     full_filename = None
     dirnames = None
+
     for dirname_, dirnames_, filenames in os.walk(path):
         if dirname:
             break
@@ -399,7 +445,7 @@ def get_features_from_file(path, file_name, smart_mode, common_autotests_folder)
             feature_data = fetch_with_autotests_check(feature_data, js_dir)
         features.append(feature_data)
 
-    except Exception:
+    except Exception as e:
         return []
 
     features_ = deepcopy(features)
@@ -417,6 +463,7 @@ def get_features_from_file(path, file_name, smart_mode, common_autotests_folder)
 def get_updated_tests_objcts(features, version):
     updated_test_files = []
     updated_project_tests = []
+    new_project_tests = []
     updated_test_steps = []
 
     keywords = {
@@ -439,29 +486,42 @@ def get_updated_tests_objcts(features, version):
 
         for scenario in feature["scenarios"]:
             project_test = test_file.tests.filter(test_name=scenario["name"])
-            if not project_test.exists():
-                project_test = ProjectTest(test_name=scenario["name"], file=test_file)
-                updated_project_tests.append(project_test)
-            else:
+
+            if project_test.exists():
                 project_test = project_test.first()
+                if project_test.start_line != scenario["start_line"] or project_test.last_line != scenario["last_line"]:
+                    project_test.start_line = scenario["start_line"]
+                    project_test.last_line = scenario["last_line"]
+                    updated_project_tests.append(project_test)
+
+            else:
+                project_test = ProjectTest(test_name=scenario["name"],
+                                           file=test_file,
+                                           start_line=scenario["start_line"],
+                                           last_line=scenario["last_line"])
+                new_project_tests.append(project_test)
+
             for step in scenario["steps"]:
                 keyword = keywords.get(step["keywordType"], "2")
                 full_text = step["keyword"] + step["text"]
                 step_ = project_test.steps.filter(keyword=keyword, text=full_text)
+                number = step["number"]
                 if not step_.exists():
                     step_ = TestStep(
                         keyword=keyword,
                         project_test=project_test,
                         text=full_text,
                         has_auto_test=step.get("has_auto_test", False),
+                        number=number,
                     )
                     updated_test_steps.append(step_)
                 else:
                     step_ = step_.first()
+                    step_.number = number
                     step_.has_auto_test = step.get("has_auto_test", False)
                     step_.save()
 
-    return updated_test_files, updated_project_tests, updated_test_steps
+    return updated_test_files, new_project_tests, updated_project_tests, updated_test_steps
 
 
 def get_new_tests_objects(features, version):
@@ -482,17 +542,22 @@ def get_new_tests_objects(features, version):
         new_test_files.append(test_file)
 
         for scenario in feature["scenarios"]:
-            project_test = ProjectTest(test_name=scenario["name"], file=test_file)
+            project_test = ProjectTest(test_name=scenario["name"],
+                                       file=test_file,
+                                       start_line=scenario["start_line"],
+                                       last_line=scenario["last_line"])
             new_project_tests.append(project_test)
 
             for step in scenario["steps"]:
                 keyword = keywords.get(step["keywordType"], "2")
                 full_text = step["keyword"] + step["text"]
+                number = step["number"]
                 step = TestStep(
                     keyword=keyword,
                     project_test=project_test,
                     text=full_text,
                     has_auto_test=step.get("has_auto_test", False),
+                    number=number
                 )
                 new_test_steps.append(step)
 
@@ -528,6 +593,7 @@ def get_deleted_tests_objects(features, version):
             continue
         for scenario in feature["scenarios"]:
             project_test = test_file.tests.filter(test_name=scenario["name"])
+
             if project_test.exists():
                 project_test = project_test.first()
                 deleted_project_tests.remove(project_test.id)
@@ -548,6 +614,9 @@ def get_deleted_tests_objects(features, version):
 
 
 def get_deleted_tests_objects_from_file(features, test_file):
+    if not features:
+        return None, None
+
     deleted_project_tests = []
     deleted_test_steps = []
 
@@ -570,17 +639,24 @@ def get_deleted_tests_objects_from_file(features, test_file):
         project_test = test_file.tests.filter(test_name=scenario["name"])
         if project_test.exists():
             project_test = project_test.first()
-            deleted_project_tests.remove(project_test.id)
+            try:
+                deleted_project_tests.remove(project_test.id)
+            except ValueError:
+                continue
         else:
             continue
 
         for step in scenario["steps"]:
             keyword = keywords.get(step["keywordType"], "2")
             full_text = step["keyword"] + step["text"]
-            step_ = project_test.steps.filter(keyword=keyword, text=full_text)
-            if step_.exists():
-                step_ = step_.first()
-                deleted_test_steps.remove(step_.id)
+            steps = project_test.steps.filter(keyword=keyword, text=full_text)
+            if steps.exists():
+                for step_ in steps:
+                    try:
+                        deleted_test_steps.remove(step_.id)
+                        break
+                    except ValueError:
+                        pass
             else:
                 continue
 

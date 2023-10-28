@@ -15,6 +15,9 @@ ADD ./test-management-system/frontend/src/ .
 RUN npm i webpack webpack-cli --save-dev
 RUN npm i @babel/core babel-loader @babel/preset-env @babel/preset-react --save-dev
 RUN npm i react react-dom --save-dev
+RUN npm i @uiw/react-codemirror
+RUN npm i @codemirror/legacy-modes
+
 
 ADD ./test-management-system/frontend/.babelrc .
 ADD ./test-management-system/frontend/webpack.config.js .

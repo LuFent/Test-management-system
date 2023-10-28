@@ -1,6 +1,11 @@
 import React, { Component } from "react";
 import { useState } from "react";
 import {useRef} from "react";
+import CodeMirror from "@uiw/react-codemirror";
+import { StreamLanguage } from '@codemirror/language';
+import { gherkin } from '@codemirror/legacy-modes/mode/gherkin';
+
+
 
 function getCookie(name) {
   var cookieValue = null;
@@ -41,10 +46,11 @@ export default function EditFileModal({
     setFileName(event.target.value);
   };
 
-  const handleFileText = (event) => {
+
+  const handleFileTextChange = React.useCallback((value, viewUpdate) => {
     setFileTextChanged(true);
-    setFileText(event.target.value);
-  };
+    setFileText(value);
+  }, []);
 
   function editFile() {
     setFileNameError("");
@@ -113,17 +119,28 @@ export default function EditFileModal({
   }
   let textAreaElement = undefined;
   let fileNameElement = undefined;
+
+  const codeOptions = {
+    line: true,
+    lineNumbers: true,
+    tabSize: 4,
+    indentWithTabs: true,
+    styleActiveLine: true,
+    lineWrapping: true,
+    foldGutter: true
+  };
+
+
   if (textAccepted) {
     textAreaElement = (
-        <textarea
-         className="form-control"
-         id="edited-file-text"
-         placeholder="File text"
-         value={fileText}
-         onChange={handleFileText}
-         rows="20"
-         >
-         </textarea>)
+        <CodeMirror
+          placeholder="File text"
+          value={fileText}
+          onChange={handleFileTextChange}
+          extensions={[StreamLanguage.define(gherkin)]}
+          options={codeOptions}
+        />
+      );
 
    fileNameElement = (
        <input
@@ -134,12 +151,13 @@ export default function EditFileModal({
         id="editFileName"
         onChange={handleFileNameChange}
         value={fileName}
+
       />
    )
   } else {
     textAreaElement = (
         <textarea
-         className="form-control"
+         className="form-control textarea-numbered"
          id="edited-file-text"
          rows="20"
          readOnly="True"

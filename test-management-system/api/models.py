@@ -137,15 +137,28 @@ class ProjectTest(models.Model):
         default=Status.UNDEFINED,
     )
 
-    text = models.TextField(
+    comment = models.TextField(
         max_length=20000, verbose_name="Test comment", blank=True, null=True
     )
+
+    start_line = models.PositiveIntegerField(
+        verbose_name="First line number",
+    )
+
+    last_line = models.PositiveIntegerField(
+        verbose_name="Last line number",
+    )
+
+    needs_expanded_view = models.BooleanField(verbose_name="needs expanded view", default=False)
 
     test_name = models.CharField(max_length=200, verbose_name="Test name")
 
     file = models.ForeignKey(
         TestFile, on_delete=models.CASCADE, related_name="tests", verbose_name="File"
     )
+
+    class Meta:
+        ordering = ["start_line", "id"]
 
     def __str__(self):
         return f"Test {self.test_name}"
@@ -178,6 +191,11 @@ class TestStep(models.Model):
     )
 
     has_auto_test = models.BooleanField(default=False)
+
+    number = models.IntegerField(verbose_name="Step number", default=0)
+
+    class Meta:
+        ordering = ["number", "id"]
 
     def __str__(self):
         return f"{self.project_test} -- {self.text}"

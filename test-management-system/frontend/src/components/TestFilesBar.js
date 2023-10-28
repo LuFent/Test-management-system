@@ -9,9 +9,10 @@ export default function TestFilesBar({
   testFiles,
   onTestFileClick,
   handleTestStatusUpdate,
-  handleTestTextUpdate,
+  handleTestCommentUpdate,
   getTestData,
   saveAllTests,
+  openShowTestModal
 }) {
   if (testFiles.length == 0) {
     return <span>No test files</span>;
@@ -110,7 +111,6 @@ export default function TestFilesBar({
     }
   }
   const activeTests = activeTestFile.tests;
-
   return (
     <div>
       <div className="table-with-bar-container">
@@ -127,12 +127,13 @@ export default function TestFilesBar({
         <TestTable
           tests={activeTests}
           handleTestStatusUpdate={handleTestStatusUpdate}
-          handleTestTextUpdate={handleTestTextUpdate}
+          handleTestCommentUpdate={handleTestCommentUpdate}
           getTestData={getTestData}
           saveAllTestsFunction={saveAllTests}
           activeVersionId={activeVersionId}
           activeTestFileId={activeTestFileId}
           activeTestFileName={activeTestFile.file_name}
+          openShowTestModal={openShowTestModal}
         />
       </div>
     </div>

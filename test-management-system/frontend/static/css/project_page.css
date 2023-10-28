@@ -173,3 +173,12 @@
 .file-action {
     margin-left: 1rem;
 }
+
+.ͼ2 .cm-activeLine {
+    background-color: transparent;
+}
+
+.expand-container {
+    display: flex;
+    justify-content: flex-end;
+}

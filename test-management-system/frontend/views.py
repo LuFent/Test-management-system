@@ -36,7 +36,6 @@ class RegisterForm(APIView):
 class ProjectReactBase(APIView):
     def get(self, request, project_id):
         project = get_object_or_404(models.Project, id=project_id)
-        # return render(request, "test.html")
         return render(request, "react/project_page.html")
 
 

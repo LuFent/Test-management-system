@@ -1,6 +1,10 @@
 import React, { Component } from "react";
 import { useState } from "react";
 import {useRef} from "react";
+import CodeMirror from "@uiw/react-codemirror";
+import { StreamLanguage } from '@codemirror/language';
+import { gherkin } from '@codemirror/legacy-modes/mode/gherkin';
+
 
 function getCookie(name) {
   var cookieValue = null;
@@ -32,9 +36,9 @@ export default function AddFileModal(activeVersionId) {
     setFileName(event.target.value);
   };
 
-  const handleFileText = (event) => {
-    setFileText(event.target.value);
-  };
+    const handleFileTextChange = React.useCallback((value, viewUpdate) => {
+    setFileText(value);
+  }, []);
 
 
   function createFile() {
@@ -123,16 +127,12 @@ export default function AddFileModal(activeVersionId) {
                 </div>
 
                 <div className="mb-3">
-                   <textarea
-                     className="form-control"
-                     id="message-text"
-                     placeholder="File text"
-                     value={fileText}
-                     onChange={handleFileText}
-                     rows="20"
-                     >
-
-                   </textarea>
+                    <CodeMirror
+                      placeholder="File text"
+                      value={fileText}
+                      onChange={handleFileTextChange}
+                      extensions={[StreamLanguage.define(gherkin)]}
+                    />
                 </div>
                 <div className="error-container">
                   <p className="text-danger field-error-message">
