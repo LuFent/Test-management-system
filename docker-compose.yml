@@ -17,6 +17,7 @@ services:
         entrypoint: /app/docker/server/django-entrypoint.sh
         volumes:
             - static_volume:/app/test-management-system/staticfiles/
+            - features_volume:/app/test-management-system/feature_files/
         expose:
             - 8000
         env_file:
@@ -29,6 +30,7 @@ services:
         entrypoint: /app/docker/server/celery-entrypoint.sh
         volumes:
             - static_volume:/app/test-management-system/staticfiles/
+            - features_volume:/app/test-management-system/feature_files/
         env_file:
             - .env
         depends_on:
@@ -62,4 +64,5 @@ services:
 
 volumes:
     static_volume: {}
+    features_volume: {}
     postgres_data: {}

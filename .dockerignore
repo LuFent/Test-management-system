@@ -4,7 +4,7 @@
 **/venv
 
 **/db.sqlite3
-**/feature_files
+**/feature_files/**
 
 **/node_modules
 **/main.js
