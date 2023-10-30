@@ -18,6 +18,7 @@ from .tools import (
     remove_repo,
     get_common_folder_path,
     get_commit_message,
+    del_reserve_repo
 )
 from django.conf import settings
 from os.path import join
@@ -166,6 +167,7 @@ def update_version(repo_path, username, token, branch, repo_url, version_id):
     TestStep.objects.bulk_create(updated_test_steps)
     version.error_message = None
     version.save()
+    del_reserve_repo(repo_path)
 
 
 @app.task

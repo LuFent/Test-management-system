@@ -59,6 +59,13 @@ def unreserve_repo(repo_path):
         os.rename(reserved_repo_path, repo_path)
 
 
+def del_reserve_repo(repo_path):
+    reserved_repo_path = get_reserve_repo_name(repo_path)
+    if os.path.isdir(reserved_repo_path):
+        rmtree(reserved_repo_path)
+
+
+
 def get_repo_path(project_id, version_id):
     return os.path.join(
         settings.DOT_FEATURE_FILES_DIR, str(project_id), str(version_id)
