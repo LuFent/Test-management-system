@@ -136,6 +136,10 @@ class UpdateVersion(APIView):
 class PushFiles(APIView):
     def post(self, request):
         data = request.data
+        commit_username = request.user.full_name
+        commit_email = request.user.email
+        if not commit_username:
+            commit_username = "unnamed_user"
 
         version_id = data.get("version_id")
         if not version_id:
@@ -157,6 +161,8 @@ class PushFiles(APIView):
                 branch=branch,
                 repo_url=repo_url,
                 version_id=version.id,
+                commit_email=commit_email,
+                commit_username=commit_username
             )
         except Exception as e:
             return Response(

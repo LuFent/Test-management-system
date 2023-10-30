@@ -334,25 +334,22 @@ def clone_features(
 
     try:
         repo = Repo.clone_from(url=url, to_path=repo_path, multi_options=params)
-    except Exception as e:
-        return False, str(e.stderr)
 
-    git_ = repo.git
+        git_ = repo.git
 
-    if not smart_mode and not particular_dir:
-        git_.sparse_checkout("set", dot_feature_files_mask)
+        if not smart_mode and not particular_dir:
+            git_.sparse_checkout("set", dot_feature_files_mask, "--no-cone")
 
-    elif not smart_mode and particular_dir:
-        mask = particular_dir + "/" + dot_feature_files_mask
-        git_.sparse_checkout("set", mask)
+        elif not smart_mode and particular_dir:
+            mask = particular_dir + "/" + dot_feature_files_mask
+            git_.sparse_checkout("set", mask, "--no-cone")
 
-    elif smart_mode and particular_dir:
-        git_.sparse_checkout("set", particular_dir)
+        elif smart_mode and particular_dir:
+            git_.sparse_checkout("set", particular_dir)
 
-    else:
-        return False, "Cant be smart mode without dir"
+        else:
+            return False, "Cant be smart mode without dir"
 
-    try:
         if commit:
             git_.checkout(commit)
         else:
@@ -366,13 +363,16 @@ def clone_features(
     return True, cur_commit
 
 
-def push_files(repo_path, commit_message):
+def push_files(repo_path, commit_message, commit_email, commit_username):
     repo = Repo(repo_path)
     git_ = repo.git
     try:
         git_.add(".")
         if NOTHING_TO_COMMIT_MESSAGE == git_.status().split("\n")[-1]:
             return True, True
+
+        repo.config_writer().set_value("user", "name", commit_username).release()
+        repo.config_writer().set_value("user", "email", commit_email).release()
         git_.commit("-m", commit_message)
         git_.push()
     except Exception as e:

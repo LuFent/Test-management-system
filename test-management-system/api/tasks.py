@@ -171,7 +171,14 @@ def update_version(repo_path, username, token, branch, repo_url, version_id):
 
 
 @app.task
-def push_test_files(repo_path, username, token, branch, repo_url, version_id):
+def push_test_files(repo_path,
+                    username,
+                    token,
+                    branch,
+                    repo_url,
+                    version_id,
+                    commit_email,
+                    commit_username):
     try:
         version = ProjectVersion.objects.get(id=version_id)
     except ObjectDoesNotExist:
@@ -216,7 +223,7 @@ def push_test_files(repo_path, username, token, branch, repo_url, version_id):
         return
 
     copy_files_to_dir(files_to_push, os.path.join(repo_path, particular_dir))
-    status, data = push_files(repo_path, commit_message)
+    status, data = push_files(repo_path, commit_message, commit_email, commit_username)
     if not status:
         version.error_message = get_files_push_error(data)
         version.save()
