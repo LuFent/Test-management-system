@@ -457,6 +457,7 @@ class UpdateFile(APIView):
             old_path = test_file.file_path
             rename_file_hard(test_file.file_path, new_file_path)
             test_file.file_path = new_file_path
+            test_file.manually_created = True
             test_file.save()
 
         if "file_text" in data:
@@ -522,6 +523,7 @@ class UpdateFile(APIView):
             if deleted_project_tests:
                 bulk_delete(ProjectTest, deleted_project_tests)
 
+        test_file.manually_created = True
         test_file.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
 
