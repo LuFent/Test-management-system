@@ -101,8 +101,6 @@
 
 .table-container{
 	margin-top: 1vh;
-	flex-grow: 2;
-	margin-left: 1rem;
 	display: flex;
 	flex-direction: column
 }
@@ -181,4 +179,16 @@
 .expand-container {
     display: flex;
     justify-content: flex-end;
+}
+
+.table-with-title-container {
+    display: flex;
+    flex-direction: column;
+    margin-top: 1rem;
+    margin-left: 1rem;
+    flex-grow: 2;
+}
+
+.cm-editor {
+    max-height: 60vh;
 }

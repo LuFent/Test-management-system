@@ -4,7 +4,7 @@ import {useRef} from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { StreamLanguage } from '@codemirror/language';
 import { gherkin } from '@codemirror/legacy-modes/mode/gherkin';
-
+import { indentUnit } from "@codemirror/language";
 
 
 function getCookie(name) {
@@ -120,16 +120,6 @@ export default function EditFileModal({
   let textAreaElement = undefined;
   let fileNameElement = undefined;
 
-  const codeOptions = {
-    line: true,
-    lineNumbers: true,
-    tabSize: 4,
-    indentWithTabs: true,
-    styleActiveLine: true,
-    lineWrapping: true,
-    foldGutter: true
-  };
-
 
   if (textAccepted) {
     textAreaElement = (
@@ -137,8 +127,8 @@ export default function EditFileModal({
           placeholder="File text"
           value={fileText}
           onChange={handleFileTextChange}
-          extensions={[StreamLanguage.define(gherkin)]}
-          options={codeOptions}
+          extensions={[StreamLanguage.define(gherkin), indentUnit.of("    ")]}
+          scrollbarStyle={'simple'}
         />
       );
 

@@ -532,10 +532,21 @@ class GetTestText(APIView):
         file_path = test.file.file_path
         start_line, last_line = test.start_line, test.last_line
         test_text = ""
+        lines = []
+        min_indent = 9999
         with open(file_path, "r") as f:
             file_text = f.readlines()
-            for line_number in range(start_line - 1, last_line + 1):
-                test_text += file_text[line_number]
+            for line_number in range(start_line - 1, last_line):
+                if file_text[line_number]:
+                    lines.append(file_text[line_number])
+
+        for line in lines:
+            indent = len(line) - len(line.lstrip())
+            if indent < min_indent:
+                min_indent = indent
+
+        for line in lines:
+            test_text += line[min_indent:]
 
         data = {"text": test_text, "name": test.test_name}
         return Response(data, status=status.HTTP_200_OK)

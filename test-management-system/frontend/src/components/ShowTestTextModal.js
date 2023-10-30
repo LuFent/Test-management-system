@@ -4,7 +4,7 @@ import {useRef} from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { StreamLanguage } from '@codemirror/language';
 import { gherkin } from '@codemirror/legacy-modes/mode/gherkin';
-
+import { EditorState } from '@codemirror/state';
 
 
 function getCookie(name) {
@@ -28,13 +28,10 @@ export default function ShowFileTextModal({
                             openedTestText
                             }){
 
-  let linesAmount = 0
-  if (typeof openedTestText !== "undefined"){
-    linesAmount = openedTestText.split(/\r\n|\r|\n/).length
-  }
+
   return (
-         <div className="modal fade" id="showFileTextModal" tabIndex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-          <div className="modal-dialog">
+         <div className="modal fade" id="showTestTextModal" tabIndex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+          <div className="modal-dialog modal-lg modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title" id="exampleModalLabel">{openedTestName}</h5>
@@ -43,12 +40,10 @@ export default function ShowFileTextModal({
               <div className="modal-body">
                 <form>
                   <div className="mb-3">
-                    <textarea
-                        className="form-control"
-                        id="message-text"
-                        value={openedTestText}
-                        rows={linesAmount}
-                        disabled></textarea>
+                    <CodeMirror
+                      value={openedTestText}
+                      extensions={[StreamLanguage.define(gherkin), EditorState.readOnly.of(true)]}
+                    />
                   </div>
                 </form>
               </div>

@@ -1,7 +1,7 @@
 import React, { Component } from "react";
 import TestTable from "./TestsTable";
 import AddFileModal from "./AddFileModal";
-
+import TestTitle from "./TestTitle";
 
 export default function TestFilesBar({
   activeVersionId,
@@ -12,7 +12,9 @@ export default function TestFilesBar({
   handleTestCommentUpdate,
   getTestData,
   saveAllTests,
-  openShowTestModal
+  openShowTestModal,
+  handleHideCoveredTestsButton,
+  hideCoveredTestsButtonValue
 }) {
   if (testFiles.length == 0) {
     return <span>No test files</span>;
@@ -124,17 +126,25 @@ export default function TestFilesBar({
            activeVersionId={activeVersionId}
         />
        </div>
-        <TestTable
-          tests={activeTests}
-          handleTestStatusUpdate={handleTestStatusUpdate}
-          handleTestCommentUpdate={handleTestCommentUpdate}
-          getTestData={getTestData}
-          saveAllTestsFunction={saveAllTests}
-          activeVersionId={activeVersionId}
-          activeTestFileId={activeTestFileId}
-          activeTestFileName={activeTestFile.file_name}
-          openShowTestModal={openShowTestModal}
-        />
+       <div className="table-with-title-container">
+            <TestTitle
+                activeTestFileName={activeTestFile.file_name}
+                hideCoveredTestsButtonValue={hideCoveredTestsButtonValue}
+                handleHideCoveredTestsButton={handleHideCoveredTestsButton}
+            />
+            <TestTable
+              tests={activeTests}
+              handleTestStatusUpdate={handleTestStatusUpdate}
+              handleTestCommentUpdate={handleTestCommentUpdate}
+              getTestData={getTestData}
+              saveAllTestsFunction={saveAllTests}
+              activeVersionId={activeVersionId}
+              activeTestFileId={activeTestFileId}
+              activeTestFileName={activeTestFile.file_name}
+              openShowTestModal={openShowTestModal}
+              hideCoveredTestsButtonValue={hideCoveredTestsButtonValue}
+            />
+        </div>
       </div>
     </div>
   );

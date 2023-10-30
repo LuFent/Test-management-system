@@ -13,8 +13,10 @@ export default function ProjectTittle({
   activeVersionId,
   activeTestFileId,
   activeTestFileName,
-  openShowTestModal
+  openShowTestModal,
+  hideCoveredTestsButtonValue
 }) {
+
   if (tests.length == 0) {
     return <span>No tests</span>;
   }
@@ -37,6 +39,11 @@ export default function ProjectTittle({
   tests.sort((a, b) => {return b["start_line"] - a["start_line"]})
   for (let testIndex = tests.length - 1; testIndex >= 0; testIndex--) {
     const test = tests[testIndex];
+    if (hideCoveredTestsButtonValue && (test["covered_steps_amount"] == test["steps_amount"])){
+        continue
+    }
+
+
     const testState = getTestData(test.id);
 
     let passedButton = (
@@ -135,6 +142,7 @@ export default function ProjectTittle({
 
     let autoTestCoveredOutcomeSteps = "";
     let dropDownId = "dropdownMenuButton" + test.id;
+
     if (test.outcome_steps_amount > 0) {
       autoTestCoveredOutcomeSteps += (
         (test["covered_outcome_steps_amount"] / test["outcome_steps_amount"]) *
@@ -150,14 +158,12 @@ export default function ProjectTittle({
             <p><a type="button"
                   className="link-opacity-100-hover test-step"
                   data-bs-toggle="modal"
-                  data-bs-target="#showFileTextModal"
+                  data-bs-target="#showTestTextModal"
                   onClick={() => openShowTestModal(test.id)}
                   >Expand</a></p>
         </div>
       </li>
       );
-
-
     if (openedStepsTests.includes(test.id)) {
         stepsElements = (
         <div className="steps-opened">

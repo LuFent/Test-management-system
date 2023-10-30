@@ -83,6 +83,8 @@ def create_version(repo_path, username, token, branch, commit, repo_url, version
     TestFile.objects.bulk_create(new_test_files)
     ProjectTest.objects.bulk_create(new_project_tests)
     TestStep.objects.bulk_create(new_test_steps)
+    version.error_message = None
+    version.save()
 
 
 @app.task
@@ -148,6 +150,7 @@ def update_version(repo_path, username, token, branch, repo_url, version_id):
         features = get_features(repo_path, smart_mode, common_autotests_folder)
         (
             updated_test_files,
+            new_project_tests,
             updated_project_tests,
             updated_test_steps,
         ) = get_updated_tests_objcts(features, version)
@@ -158,8 +161,11 @@ def update_version(repo_path, username, token, branch, repo_url, version_id):
         return
 
     TestFile.objects.bulk_create(updated_test_files)
-    ProjectTest.objects.bulk_create(updated_project_tests)
+    ProjectTest.objects.bulk_create(new_project_tests)
+    ProjectTest.objects.bulk_update(updated_project_tests, ["last_line", "start_line"])
     TestStep.objects.bulk_create(updated_test_steps)
+    version.error_message = None
+    version.save()
 
 
 @app.task
@@ -171,6 +177,8 @@ def push_test_files(repo_path, username, token, branch, repo_url, version_id):
 
     files_to_push = version.test_files.filter(manually_created=True)
     if not files_to_push.exists():
+        version.error_message = None
+        version.save()
         return
 
     commit_message = get_commit_message(files_to_push)
@@ -217,4 +225,6 @@ def push_test_files(repo_path, username, token, branch, repo_url, version_id):
         file.manually_created = False
 
     TestFile.objects.bulk_update(files_to_push, ["manually_created"])
+    version.error_message = None
+    version.save()
     remove_repo(repo_path)

@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import ProjectTittle from "./ProjectTittle";
 import TestFilesBar from "./TestFilesBar";
 import AddVersionModal from "./AddVersionModal";
-import ShowFileTextModal from "./ShowFileTextModal";
+import ShowTestTextModal from "./ShowTestTextModal";
 
 
 function getCookie(name) {
@@ -36,6 +36,7 @@ class App extends Component {
       testsStates: undefined,
       openedTestName: undefined,
       openedTestText: undefined,
+      hideCoveredTestsButtonValue: false
     };
     this.updatedTestsIds = [];
   }
@@ -83,6 +84,13 @@ class App extends Component {
       testsStates: testsStates,
     });
   };
+
+  handleHideCoveredTestsButton = () => {
+      this.setState({
+            hideCoveredTestsButtonValue: !this.state.hideCoveredTestsButtonValue
+        });
+  }
+
 
   handleTestCommentUpdate = (testId, event) => {
     if (!this.updatedTestsIds.includes(testId)) {
@@ -361,8 +369,10 @@ class App extends Component {
             getTestData={this.getTestData}
             saveAllTests={this.saveAllTests}
             openShowTestModal={this.openShowTestModal}
+            handleHideCoveredTestsButton={this.handleHideCoveredTestsButton}
+            hideCoveredTestsButtonValue={this.state.hideCoveredTestsButtonValue}
           />
-        <ShowFileTextModal
+        <ShowTestTextModal
             openedTestName={this.state.openedTestName}
             openedTestText={this.state.openedTestText}
         />
