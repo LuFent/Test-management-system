@@ -7,6 +7,15 @@ import os
 from django.db.models import Q
 
 
+class CustomManager(models.Manager):
+    def filter_locally(self, *args, **kwargs):
+        res = []
+        for instance in self.all():
+            if all((instance.__getattribute__(field)==value for field, value in kwargs.items())) and all((func(instance) for func in args)):
+                res.append(instance)
+
+        return res
+
 UserModel = get_user_model()
 
 
@@ -42,7 +51,7 @@ class Project(models.Model):
         verbose_name="Git username",
         default="user",
     )
-
+    objects = CustomManager()
     def __str__(self):
         return f"{self.name}"
 
@@ -75,7 +84,7 @@ class ProjectVersion(models.Model):
         default=True,
         verbose_name="Is version valid",
     )
-
+    objects = CustomManager()
     class Meta:
         unique_together = (
             "project",
@@ -109,7 +118,7 @@ class TestFile(models.Model):
     )
 
     manually_created = models.BooleanField(default=False)
-
+    objects = CustomManager()
     @property
     def file_name(self):
         return os.path.splitext(ntpath.basename(self.file_path))[0]
@@ -156,7 +165,7 @@ class ProjectTest(models.Model):
     file = models.ForeignKey(
         TestFile, on_delete=models.CASCADE, related_name="tests", verbose_name="File"
     )
-
+    objects = CustomManager()
     class Meta:
         ordering = ["start_line", "id"]
 
@@ -190,12 +199,50 @@ class TestStep(models.Model):
         max_length=300, verbose_name="Test text", blank=True, null=True
     )
 
+    text_without_keyword = models.TextField(
+        max_length=300, verbose_name="Test text without keyword", blank=True, null=True
+    )
+
     has_auto_test = models.BooleanField(default=False)
 
     number = models.IntegerField(verbose_name="Step number", default=0)
 
+    objects = CustomManager()
     class Meta:
         ordering = ["number", "id"]
 
     def __str__(self):
-        return f"{self.project_test} -- {self.text}"
+        return f"{self.project_test} -- {self.keyword} {self.text}"
+
+
+class AutoTestStep(models.Model):
+    class Keyword(models.TextChoices):
+        OUTCOME = "1", "Outcome"
+        CONJUNCTION = "2", "Conjunction"
+        UNKNOWN = "3", "Unknown"
+        ACTION = "4", "Action"
+        CONTEXT = "5", "Context"
+
+    keyword = models.CharField(
+        max_length=20,
+        verbose_name="Step type",
+        choices=Keyword.choices,
+        default=Keyword.UNKNOWN,
+    )
+
+    project_files = models.ManyToManyField(
+        TestFile,
+        related_name="auto_test_steps",
+        verbose_name="Step in auto test files",
+    )
+
+    text = models.CharField(
+        max_length=300, verbose_name="Test text", blank=True, null=True
+    )
+
+    is_common = models.BooleanField(
+        default=False, verbose_name="Is this step common"
+    )
+    objects = CustomManager()
+    def __str__(self):
+        return f"Auto test -- {self.keyword} {self.text}"

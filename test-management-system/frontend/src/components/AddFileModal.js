@@ -5,6 +5,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { StreamLanguage } from '@codemirror/language';
 import { gherkin } from '@codemirror/legacy-modes/mode/gherkin';
 import { indentUnit } from "@codemirror/language";
+import getAutoCompletion from "./AutoCompletion"
 
 
 function getCookie(name) {
@@ -132,7 +133,7 @@ export default function AddFileModal(activeVersionId) {
                       placeholder="File text"
                       value={fileText}
                       onChange={handleFileTextChange}
-                      extensions={[StreamLanguage.define(gherkin),  indentUnit.of("    ")]}
+                      extensions={[getAutoCompletion(), StreamLanguage.define(gherkin),  indentUnit.of("    ")]}
                     />
                 </div>
                 <div className="error-container">

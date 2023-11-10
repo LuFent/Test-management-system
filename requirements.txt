@@ -9,3 +9,4 @@ gunicorn==21.2.0
 psycopg2-binary==2.9.3
 gherkin-official==24.1.0
 pathvalidate==3.2.0
+rjsmin==1.2.2

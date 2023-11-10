@@ -9,12 +9,27 @@ from shutil import rmtree, copyfile
 from django.conf import settings
 from django.db import connection
 from pprint import pprint
+from .auto_test_plugins import CypressCucumberPreprocessorPlugin
+from django.db.models import Prefetch
+ccp_plugin = CypressCucumberPreprocessorPlugin()
 
 parser = Parser()
 cursor = connection.cursor()
 RESERVED_FILES_POSTFIX = "_res"
 PUSHING_DIR_POSTFIX = "_push"
 NOTHING_TO_COMMIT_MESSAGE = "nothing to commit, working tree clean"
+CONJUNCTION_STEP_TYPE = "Conjunction"
+UNKNOWN_STEP_TYPE = "Unknown"
+CONJUNCTION_STEP_KEYWORD = "*"
+
+STEP_TYPES_CODES = {
+    "Outcome": "1",
+    "Conjunction": "2",
+    "Unknown": "3",
+    "Action": "4",
+    "Context": "5"
+}
+
 
 
 def covered_in_single_quotes(text):
@@ -147,6 +162,47 @@ def check_for_similar_test_names(features):
     return duplicates
 
 
+def fetch_file_with_auto_test(file):
+    auto_steps = file.auto_test_steps.all()
+    tests = file.tests.all()
+    steps_to_update = []
+    for test in tests:
+        steps = test.steps.all()
+        for step in steps:
+            for auto_step in auto_steps:
+                if re.match(auto_step.text, step.text_without_keyword) and step.keyword == auto_step.keyword:
+                    step.has_auto_test = True
+                    steps_to_update.append(step)
+                    break
+
+    return steps_to_update
+
+
+def fetch_version_files_with_auto_test(version_id):
+    version = (
+        ProjectVersion.objects.filter(id=version_id)
+        .prefetch_related(
+            Prefetch(
+                "test_files",
+                queryset=TestFile.objects.prefetch_related(
+                    Prefetch(
+                        "tests",
+                        queryset=ProjectTest.objects.prefetch_related(
+                            Prefetch("steps", queryset=TestStep.objects.all())
+                        ),
+                    )
+                ).prefetch_related("auto_test_steps"),
+            )
+        )
+        .first()
+    )
+    steps = []
+    for file in version.test_files.all():
+        steps.extend(fetch_file_with_auto_test(file))
+
+    TestStep.objects.bulk_update(steps, ["has_auto_test"])
+
+
 def get_test_text_position(scenario):
     last_line = -1
 
@@ -165,6 +221,13 @@ def get_test_text_position(scenario):
                     last_line = cells["location"]["line"]
     return scenario["location"]["line"], last_line
 
+
+def filter_queryset(queryset, **kwargs):
+    res = []
+    for instance in queryset:
+        if all((instance.__getattribute__(field)==value for field, value in kwargs.items())):
+            res.append(instance)
+    return res
 
 def get_substances_regexes(text):
     strings_with_subs = []
@@ -239,7 +302,10 @@ def fetch_with_autotests_check(feature_data, js_dir):
 
     for file_name in js_files:
         file_path = os.path.join(js_dir, file_name)
+        auto_test_steps = ccp_plugin.get_auto_test_steps_from_file(file_path)
+
         with open(file_path, "r") as f:
+
             file_text = f.read()
 
         substances_regexes = get_substances_regexes(file_text)
@@ -262,7 +328,6 @@ def fetch_with_autotests_check(feature_data, js_dir):
 def parse_feature_file(file_path):
     with open(file_path, "r") as f:
         gherkin_document = parser.parse(TokenScanner(f.read()))
-
     feature_name = gherkin_document["feature"]["name"]
     file_scenarios = gherkin_document["feature"]["children"]
 
@@ -284,16 +349,21 @@ def parse_feature_file(file_path):
         if not scenario_name or not scenario_type or not steps:
             continue
 
-        scenario_steps = [
-            {
-                "text": step["text"],
-                "has_auto_test": False,
-                "keyword": step["keyword"],
-                "keywordType": step["keywordType"],
-                "number": step["id"]
-            }
-            for step in steps
-        ]
+        scenario_steps = []
+        last_step_type = UNKNOWN_STEP_TYPE
+        for step in steps:
+            if step["keywordType"] != CONJUNCTION_STEP_TYPE and step["keyword"].strip() != CONJUNCTION_STEP_KEYWORD:
+                last_step_type = step["keywordType"]
+
+            scenario_steps.append(
+                {
+                    "text": step["text"],
+                    "has_auto_test": False,
+                    "keyword": step["keyword"],
+                    "keywordType": last_step_type,
+                    "number": step["id"]
+                }
+            )
 
         data["scenarios"].append(
             {
@@ -381,7 +451,7 @@ def push_files(repo_path, commit_message, commit_email, commit_username):
     return True, True
 
 
-def get_features(path, smart_mode, common_autotests_folder):
+def get_features(path):
     features = []
     feature_ext = ".feature"
 
@@ -400,22 +470,10 @@ def get_features(path, smart_mode, common_autotests_folder):
                 feature_data = parse_feature_file(file_path)
                 feature_data["file_path"] = file_path
                 feature_data["file_name"] = filename
-                if smart_mode and filename in dirnames:
-                    js_dir = os.path.join(dirname, filename)
-                    feature_data = fetch_with_autotests_check(feature_data, js_dir)
                 features.append(feature_data)
 
             except Exception as e:
                 continue
-
-    features_ = deepcopy(features)
-    if smart_mode and common_autotests_folder:
-        try:
-            features = fetch_with_common_autotests_check(
-                features, common_autotests_folder
-            )
-        except Exception:
-            return features_
 
     return features
 
@@ -424,7 +482,6 @@ def get_features_from_file(path, file_name, smart_mode, common_autotests_folder)
     features = []
     dirname = None
     full_filename = None
-    dirnames = None
 
     for dirname_, dirnames_, filenames in os.walk(path):
         if dirname:
@@ -442,36 +499,19 @@ def get_features_from_file(path, file_name, smart_mode, common_autotests_folder)
 
     filename, file_extension = os.path.splitext(full_filename)
     file_path = os.path.join(dirname, full_filename)
+    feature_data = parse_feature_file(file_path)
+    feature_data["file_path"] = file_path
+    feature_data["file_name"] = filename
 
-    try:
-        feature_data = parse_feature_file(file_path)
-        feature_data["file_path"] = file_path
-        feature_data["file_name"] = filename
-        if smart_mode and filename in dirnames:
-            js_dir = os.path.join(dirname, filename)
-            feature_data = fetch_with_autotests_check(feature_data, js_dir)
-        features.append(feature_data)
 
-    except Exception as e:
-        return []
-
-    features_ = deepcopy(features)
-    if smart_mode and common_autotests_folder:
-        try:
-            features = fetch_with_common_autotests_check(
-                features, common_autotests_folder
-            )
-        except Exception:
-            return features_
-
-    return features
+    return feature_data
 
 
 def get_updated_tests_objcts(features, version):
-    updated_test_files = []
+    new_test_files = []
     updated_project_tests = []
     new_project_tests = []
-    updated_test_steps = []
+    new_test_steps = []
 
     keywords = {
         "Outcome": "1",
@@ -482,14 +522,15 @@ def get_updated_tests_objcts(features, version):
     }
 
     for feature in features:
-        test_file = version.test_files.filter(file_path=feature["file_path"])
-        if not test_file.exists():
+        for test_file_ in version.test_files:
+            if test_file_.file_path == feature["file_path"]:
+                test_file = test_file_
+                break
+        else:
             test_file = TestFile(
                 file_path=feature["file_path"], project_version=version
             )
-            updated_test_files.append(test_file)
-        else:
-            test_file = test_file.first()
+            new_test_files.append(test_file)
 
         for scenario in feature["scenarios"]:
             project_test = test_file.tests.filter(test_name=scenario["name"])
@@ -521,14 +562,14 @@ def get_updated_tests_objcts(features, version):
                         has_auto_test=step.get("has_auto_test", False),
                         number=number,
                     )
-                    updated_test_steps.append(step_)
+                    new_test_steps.append(step_)
                 else:
                     step_ = step_.first()
                     step_.number = number
                     step_.has_auto_test = step.get("has_auto_test", False)
                     step_.save()
 
-    return updated_test_files, new_project_tests, updated_project_tests, updated_test_steps
+    return new_test_files, new_project_tests, updated_project_tests, new_test_steps
 
 
 def get_new_tests_objects(features, version):
@@ -559,10 +600,12 @@ def get_new_tests_objects(features, version):
                 keyword = keywords.get(step["keywordType"], "2")
                 full_text = step["keyword"] + step["text"]
                 number = step["number"]
+                text_without_keyword = step["text"].strip()
                 step = TestStep(
                     keyword=keyword,
                     project_test=project_test,
                     text=full_text,
+                    text_without_keyword=text_without_keyword,
                     has_auto_test=step.get("has_auto_test", False),
                     number=number
                 )

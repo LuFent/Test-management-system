@@ -128,7 +128,7 @@ export default function EditFileModal({
           value={fileText}
           onChange={handleFileTextChange}
           extensions={[StreamLanguage.define(gherkin), indentUnit.of("    ")]}
-          scrollbarStyle={'simple'}
+          scrollbarstyle={'simple'}
         />
       );
 

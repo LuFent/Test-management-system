@@ -13,7 +13,7 @@ from .serializers import (
     FileNameAndTextSerializer,
 )
 from datetime import date
-from .models import Project, ProjectVersion, TestFile, ProjectTest, TestStep
+from .models import *
 from rest_framework.generics import (
     RetrieveAPIView,
     UpdateAPIView,
@@ -40,7 +40,6 @@ from .tools import (
     bulk_delete,
     check_for_similar_test_names,
 )
-
 
 class CreateProject(APIView):
     permission_classes = [
@@ -330,6 +329,13 @@ class DeleteVersion(DestroyAPIView):
     queryset = ProjectVersion.objects.all()
     lookup_field = "id"
 
+    def perform_destroy(self, instance):
+        ids = []
+        for file in instance.test_files.prefetch_related("auto_test_steps"):
+            ids.extend(auto_test_step.id for auto_test_step in file.auto_test_steps.all())
+        AutoTestStep.objects.filter(id__in=ids).delete()
+        instance.delete()
+
 
 class CreateFile(CreateAPIView):
     serializer_class = NewFileSerializer
@@ -372,7 +378,8 @@ class CreateFile(CreateAPIView):
             features = get_features_from_file(
                 repo_path, file_name, project.smart_mode, common_autotests_folder
             )
-        except Exception:
+            features = [features]
+        except Exception as e:
             os.remove(file_path)
             return Response(
                 {"file_text": "Invalid file text"}, status=status.HTTP_400_BAD_REQUEST
