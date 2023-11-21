@@ -54,7 +54,6 @@ class CypressCucumberPreprocessorPlugin:
                     """"'"""
                 )
 
-
     def get_auto_test_steps_from_file(self, file_path):
 
         with open(file_path, "r") as f:

@@ -5,7 +5,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { StreamLanguage } from '@codemirror/language';
 import { gherkin } from '@codemirror/legacy-modes/mode/gherkin';
 import { indentUnit } from "@codemirror/language";
-import getAutoCompletion from "./AutoCompletion"
+import getAutoCompletion from "./AutoCompletion";
 
 
 function getCookie(name) {
@@ -28,6 +28,7 @@ export default function AddFileModal(activeVersionId) {
   activeVersionId = activeVersionId.activeVersionId;
   const [fileName, setFileName] = useState("");
   const [fileText, setFileText] = useState("");
+  const [autoTests, setAutoTests] = useState({});
   const [isFormAccepted, setIsFormAccepted] = useState(false);
   const [fileNameError, setFileNameError] = useState("");
   const [fileTextError, setFileTextError] = useState("");
@@ -42,7 +43,21 @@ export default function AddFileModal(activeVersionId) {
     setFileText(value);
   }, []);
 
+    let openModal = () => {
 
+    let xhr = new XMLHttpRequest();
+    const url = "/api/get_common_auto_tests/" + activeVersionId + "/";
+    xhr.open("GET", url);
+    xhr.setRequestHeader("X-CSRFToken", getCookie("csrftoken"));
+    xhr.setRequestHeader("Content-Type", "application/json");
+
+    xhr.onload = function () {
+      if (xhr.status == 200) {
+        setAutoTests(JSON.parse(xhr.responseText));
+      }
+    }.bind(this);
+    xhr.send();
+  }
   function createFile() {
     setFileNameError("");
     setFileTextError("");
@@ -86,6 +101,7 @@ export default function AddFileModal(activeVersionId) {
                 className="btn btn-outline-primary add-new-file-button"
                 data-bs-toggle="modal"
                 data-bs-target="#createFile"
+                onClick={openModal}
                 >+ Add New File</button>
         <div
           className="modal fade"
@@ -133,7 +149,7 @@ export default function AddFileModal(activeVersionId) {
                       placeholder="File text"
                       value={fileText}
                       onChange={handleFileTextChange}
-                      extensions={[getAutoCompletion(), StreamLanguage.define(gherkin),  indentUnit.of("    ")]}
+                      extensions={[getAutoCompletion(autoTests), StreamLanguage.define(gherkin),  indentUnit.of("    ")]}
                     />
                 </div>
                 <div className="error-container">

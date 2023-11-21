@@ -1,17 +1,7 @@
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework.views import APIView
-from .serializers import (
-    CreateProjectSerializer,
-    BigVersionSerializer,
-    GetProjectSerializer,
-    VersionSerializer,
-    ProjectTestSerializer,
-    ProjectTestStatusSerializer,
-    SmallVersionSerializer,
-    NewFileSerializer,
-    FileNameAndTextSerializer,
-)
+from .serializers import *
 from datetime import date
 from .models import *
 from rest_framework.generics import (
@@ -35,10 +25,13 @@ from .tools import (
     get_new_tests_objects,
     get_common_folder_path,
     rename_file_hard,
-    get_updated_tests_objcts,
+    get_updated_tests_objects,
     get_deleted_tests_objects_from_file,
     bulk_delete,
     check_for_similar_test_names,
+    sync_features_with_file,
+    get_autotest_updated_steps,
+    fetch_file_with_autotests,
 )
 
 class CreateProject(APIView):
@@ -181,8 +174,41 @@ class GetFileText(APIView):
     def get(self, request, file_id):
         file = get_object_or_404(TestFile, id=file_id)
         file_text = open(file.file_path, "rb").read()
-        reponse = HttpResponse(file_text, content_type="text/plain; charset=UTF-8")
-        return reponse
+        response = HttpResponse(file_text, content_type="text/plain; charset=UTF-8")
+        return response
+
+
+class GetFileAutoSteps(APIView):
+    def get(self, request, file_id):
+        file = TestFile.objects.filter(id=file_id).prefetch_related("auto_test_steps")
+        if not file.exists():
+            return Response({"message": "Not Found"}, status=status.HTTP_404_NOT_FOUND)
+        auto_tests = file.first().auto_test_steps.all()
+        auto_tests = AutoTestStepSerializer(auto_tests, many=True).data
+        data = dict()
+        for auto_test in auto_tests:
+            keyword_label = auto_test["keyword_label"]
+            text = auto_test["text"]
+            if keyword_label not in data:
+                data[keyword_label] = []
+            data[keyword_label].append(text)
+        return Response(data)
+
+
+class GetCommonAutoSteps(APIView):
+    def get(self, request, version_id):
+        version = get_object_or_404(ProjectVersion, id=version_id)
+        auto_tests = version.auto_test_steps.filter(is_common=True)
+        auto_tests = AutoTestStepSerializer(auto_tests, many=True).data
+        data = dict()
+        for auto_test in auto_tests:
+            keyword_label = auto_test["keyword_label"]
+            text = auto_test["text"]
+            if keyword_label not in data:
+                data[keyword_label] = []
+            data[keyword_label].append(text)
+        return Response(data)
+
 
 
 class GetVersion(RetrieveAPIView):
@@ -329,13 +355,6 @@ class DeleteVersion(DestroyAPIView):
     queryset = ProjectVersion.objects.all()
     lookup_field = "id"
 
-    def perform_destroy(self, instance):
-        ids = []
-        for file in instance.test_files.prefetch_related("auto_test_steps"):
-            ids.extend(auto_test_step.id for auto_test_step in file.auto_test_steps.all())
-        AutoTestStep.objects.filter(id__in=ids).delete()
-        instance.delete()
-
 
 class CreateFile(CreateAPIView):
     serializer_class = NewFileSerializer
@@ -376,9 +395,8 @@ class CreateFile(CreateAPIView):
 
         try:
             features = get_features_from_file(
-                repo_path, file_name, project.smart_mode, common_autotests_folder
+                repo_path, file_name
             )
-            features = [features]
         except Exception as e:
             os.remove(file_path)
             return Response(
@@ -391,7 +409,8 @@ class CreateFile(CreateAPIView):
                 {"file_text": "Invalid file text"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        duplicated_test_names = check_for_similar_test_names(features[0])
+        duplicated_test_names = check_for_similar_test_names(features)
+        features = [features]
         if duplicated_test_names:
             exception_text = f"It's can't be identical tests names: {duplicated_test_names[0]}"
             os.remove(file_path)
@@ -407,10 +426,17 @@ class CreateFile(CreateAPIView):
             ) = get_new_tests_objects(features, version)
             new_test_file = new_test_files[0]
             new_test_file.manually_created = True
-            TestFile.objects.bulk_create(new_test_files)
+            files = TestFile.objects.bulk_create(new_test_files)
             ProjectTest.objects.bulk_create(new_project_tests)
             TestStep.objects.bulk_create(new_test_steps)
-        except Exception:
+
+            if smart_mode:
+                new_test_file = files[0]
+                fetch_file_with_autotests(new_test_file)
+                steps = get_autotest_updated_steps(new_test_file)
+                TestStep.objects.bulk_update(steps, ["has_auto_test"])
+
+        except Exception as e:
             os.remove(file_path)
             return Response(
                 {"file_text": "Invalid file text"}, status=status.HTTP_400_BAD_REQUEST
@@ -475,10 +501,6 @@ class UpdateFile(APIView):
 
         if "file_text" in data:
             file_path = test_file.file_path
-            if smart_mode and particular_dir and common_autotests_folder:
-                common_autotests_folder = get_common_folder_path(
-                    repo_path, particular_dir, common_autotests_folder
-                )
             with open(file_path, "r") as f:
                 old_text = f.read()
 
@@ -488,24 +510,15 @@ class UpdateFile(APIView):
             exception_text = '"file_text": "Invalid file text"'
             try:
                 file_name = test_file.file_name + ".feature"
-                features = get_features_from_file(
-                    repo_path, file_name, project.smart_mode, common_autotests_folder
-                )
-                duplicated_test_names = check_for_similar_test_names(features[0])
+                features = get_features_from_file(repo_path, file_name)
+                if not features:
+                    raise Exception(exception_text)
+
+                duplicated_test_names = check_for_similar_test_names(features)
                 if duplicated_test_names:
                     exception_text = f"It's can't be identical tests names: {duplicated_test_names[0]}"
-                    raise Exception()
-                (
-                    updated_test_files,
-                    new_project_tests,
-                    updated_project_tests,
-                    updated_test_steps,
-                ) = get_updated_tests_objcts(features, version)
-
-                (
-                    deleted_project_tests,
-                    deleted_test_steps,
-                ) = get_deleted_tests_objects_from_file(features, test_file)
+                    raise Exception(exception_text)
+                sync_features_with_file(features, version_id)
 
             except Exception as e:
                     with open(file_path, "w") as f:
@@ -514,30 +527,18 @@ class UpdateFile(APIView):
                         rename_file_hard(new_file_path, old_path)
 
                     return Response(
-                        {"file_text": exception_text},
+                        {"file_text": e.__str__()},
                         status=status.HTTP_400_BAD_REQUEST,
                    )
+            test_file.manually_created = True
+            test_file.save()
 
-            if not features:
-                with open(file_path, "w") as f:
-                    f.write(old_text)
-                if old_path:
-                    rename_file_hard(new_file_path, old_path)
-                return Response(
-                    {"file_text": "Invalid file text"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if smart_mode:
+            fetch_file_with_autotests(test_file)
+            steps = get_autotest_updated_steps(test_file)
+            TestStep.objects.bulk_update(steps, ["has_auto_test"])
 
-            ProjectTest.objects.bulk_create(new_project_tests)
-            ProjectTest.objects.bulk_update(updated_project_tests, ["last_line", "start_line"])
-            TestStep.objects.bulk_create(updated_test_steps)
-            if deleted_test_steps:
-                bulk_delete(TestStep, deleted_test_steps)
-            if deleted_project_tests:
-                bulk_delete(ProjectTest, deleted_project_tests)
 
-        test_file.manually_created = True
-        test_file.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 

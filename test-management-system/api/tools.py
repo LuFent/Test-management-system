@@ -11,10 +11,15 @@ from django.db import connection
 from pprint import pprint
 from .auto_test_plugins import CypressCucumberPreprocessorPlugin
 from django.db.models import Prefetch
+from pathlib import Path
+from django.db.models import Q
+from gherkin.errors import CompositeParserException
+
+
 ccp_plugin = CypressCucumberPreprocessorPlugin()
 
 parser = Parser()
-cursor = connection.cursor()
+
 RESERVED_FILES_POSTFIX = "_res"
 PUSHING_DIR_POSTFIX = "_push"
 NOTHING_TO_COMMIT_MESSAGE = "nothing to commit, working tree clean"
@@ -29,6 +34,7 @@ STEP_TYPES_CODES = {
     "Action": "4",
     "Context": "5"
 }
+
 
 
 
@@ -123,7 +129,9 @@ def get_files_push_error(error_message):
     return message
 
 
-def bulk_delete(model, ids):
+def bulk_delete(model, ids, cursor):
+    if not ids:
+        return
     table_name = model.objects.model._meta.db_table
     ids = ",".join([str(id_) for id_ in ids])
     query = f"DELETE FROM {table_name} WHERE id IN ({ids})"
@@ -162,7 +170,16 @@ def check_for_similar_test_names(features):
     return duplicates
 
 
-def fetch_file_with_auto_test(file):
+def get_parse_error_message(file_name, error):
+    return f"Error in file {file_name}: {error}"
+
+def fetch_file_with_autotests(file):
+    file_name = Path(file.file_path).stem
+    autotests = file.project_version.auto_test_steps.filter(Q(autotests_folder_name=file_name) | Q(is_common=True))
+    file.auto_test_steps.set(autotests)
+
+
+def get_autotest_updated_steps(file):
     auto_steps = file.auto_test_steps.all()
     tests = file.tests.all()
     steps_to_update = []
@@ -170,8 +187,14 @@ def fetch_file_with_auto_test(file):
         steps = test.steps.all()
         for step in steps:
             for auto_step in auto_steps:
-                if re.match(auto_step.text, step.text_without_keyword) and step.keyword == auto_step.keyword:
-                    step.has_auto_test = True
+                if re.fullmatch(auto_step.text, step.text_without_keyword) and step.keyword == auto_step.keyword:
+                    if not step.has_auto_test:
+                        step.has_auto_test = True
+                        steps_to_update.append(step)
+                    break
+            else:
+                if step.has_auto_test:
+                    step.has_auto_test = False
                     steps_to_update.append(step)
                     break
 
@@ -198,7 +221,7 @@ def fetch_version_files_with_auto_test(version_id):
     )
     steps = []
     for file in version.test_files.all():
-        steps.extend(fetch_file_with_auto_test(file))
+        steps.extend(get_autotest_updated_steps(file))
 
     TestStep.objects.bulk_update(steps, ["has_auto_test"])
 
@@ -229,100 +252,89 @@ def filter_queryset(queryset, **kwargs):
             res.append(instance)
     return res
 
-def get_substances_regexes(text):
-    strings_with_subs = []
 
-    single_quoted_strings_with_substances_regex = (
-        r"""[A-Z]{1}[a-z]*?\(\'([^\n]*?{[^\n]*?}[^\n]*?)\'"""
-    )
-    double_quoted_strings_with_substances_regex = (
-        r"""[A-Z]{1}[a-z]*?\(\"([^\n]*?{[^\n]*?}[^\n]*?)\""""
-    )
-    strings_with_subs.extend(
-        re.findall(single_quoted_strings_with_substances_regex, text)
-    )
-    strings_with_subs.extend(
-        re.findall(double_quoted_strings_with_substances_regex, text)
-    )
+def fetch_with_autotests(common_autotests_folder, files, repo_path, version):
+    auto_tests_steps_objects = []
+    exclude_dirs = []
+    if common_autotests_folder:
+        exclude_dirs.append(common_autotests_folder)
+        common_autotests_steps = ccp_plugin.get_auto_test_steps_from_dir(common_autotests_folder)
+        common_autotests_steps_objects_ = []
+        for step in common_autotests_steps:
+            auto_step = AutoTestStep(keyword=STEP_TYPES_CODES[step["keyword"]],
+                                     text=step["step"],
+                                     is_common=True,
+                                     version=version)
+            common_autotests_steps_objects_.append(auto_step)
+        common_autotests_steps_objects = AutoTestStep.objects.bulk_create(common_autotests_steps_objects_)
+        for common_autotests_steps_object in common_autotests_steps_objects:
+            common_autotests_steps_object.project_files.set(files)
 
-    steps_check_regexes = []
-    curly_braces_regex = r"\\\{.*?\}"
-    any_value_regex = r"[^\n].*"
-    for string in strings_with_subs:
-        steps_check_regexes.append(
-            re.sub(curly_braces_regex, any_value_regex, re.escape(string)).strip(
-                """"'"""
-            )
-        )
+    auto_tests_folders = ccp_plugin.get_auto_test_steps_from_repo(repo_path, exclude_dirs)
 
-    return steps_check_regexes
+    for auto_tests_folder in auto_tests_folders:
+        files_objects = []
+        autotests_folder_name = None
+        for file in files:
+            if Path(file.file_path).stem == auto_tests_folder["folder"]:
+                files_objects.append(file)
+                autotests_folder_name = auto_tests_folder["folder"]
 
+        for auto_tests_step in auto_tests_folder["steps"]:
+            auto_tests_steps_object = AutoTestStep(keyword=STEP_TYPES_CODES[auto_tests_step["keyword"]],
+                                                   text=auto_tests_step["step"],
+                                                   version=version,
+                                                   autotests_folder_name=autotests_folder_name)
+            auto_tests_steps_object.project_files_ = files_objects
+            auto_tests_steps_objects.append(auto_tests_steps_object)
 
-def fetch_with_common_autotests_check(features, common_js_dir):
-    js_ext = ".js"
-
-    if not os.path.isdir(common_js_dir):
-        return features
-
-    for dirname, dirnames, filenames in os.walk(common_js_dir):
-        for full_filename in filenames:
-            filename, file_extension = os.path.splitext(full_filename)
-
-            if file_extension != js_ext:
-                continue
-
-            file_path = os.path.join(dirname, full_filename)
-            with open(file_path, "r") as f:
-                file_text = f.read()
-
-            substances_regexes = get_substances_regexes(file_text)
-            for feature in features:
-                for scenario in feature["scenarios"]:
-                    for step in scenario["steps"]:
-                        if step["has_auto_test"]:
-                            continue
-                        step_text = step["text"]
-                        step_text = step_text.strip()
-                        if covered_in_single_quotes(step_text) in file_text:
-                            step["has_auto_test"] = True
-                        elif covered_in_double_quotes(step_text) in file_text:
-                            step["has_auto_test"] = True
-                        else:
-                            for regex in substances_regexes:
-                                if re.match(regex, step_text):
-                                    step["has_auto_test"] = True
-                                    break
-        return features
+    auto_tests_steps_objects = AutoTestStep.objects.bulk_create(auto_tests_steps_objects)
+    for auto_tests_steps_object in auto_tests_steps_objects:
+        auto_tests_steps_object.project_files.add(*auto_tests_steps_object.project_files_)
+    fetch_version_files_with_auto_test(version.id)
 
 
-def fetch_with_autotests_check(feature_data, js_dir):
-    js_files = listdir(js_dir)
-    if not js_files:
-        return False
+def fetch_with_updated_autotests(common_autotests_folder, files, repo_path, version_id):
+    version = ProjectVersion.objects.filter(id=version_id).prefetch_related("auto_test_steps")
 
-    for file_name in js_files:
-        file_path = os.path.join(js_dir, file_name)
-        auto_test_steps = ccp_plugin.get_auto_test_steps_from_file(file_path)
+    auto_tests_steps_objects = []
+    exclude_dirs = []
+    if common_autotests_folder:
+        exclude_dirs.append(common_autotests_folder)
+        common_autotests_steps = ccp_plugin.get_auto_test_steps_from_dir(common_autotests_folder)
+        common_autotests_steps_objects_ = []
+        for step in common_autotests_steps:
+            auto_step = AutoTestStep(keyword=STEP_TYPES_CODES[step["keyword"]],
+                                     text=step["step"],
+                                     is_common=True,
+                                     version=version)
+            common_autotests_steps_objects_.append(auto_step)
+        common_autotests_steps_objects = AutoTestStep.objects.bulk_create(common_autotests_steps_objects_)
+        for common_autotests_steps_object in common_autotests_steps_objects:
+            common_autotests_steps_object.project_files.set(files)
 
-        with open(file_path, "r") as f:
+    auto_tests_folders = ccp_plugin.get_auto_test_steps_from_repo(repo_path, exclude_dirs)
 
-            file_text = f.read()
+    for auto_tests_folder in auto_tests_folders:
+        files_objects = []
+        autotests_folder_name = None
+        for file in files:
+            if Path(file.file_path).stem == auto_tests_folder["folder"]:
+                files_objects.append(file)
+                autotests_folder_name = auto_tests_folder["folder"]
 
-        substances_regexes = get_substances_regexes(file_text)
-        for scenario in feature_data["scenarios"]:
-            for step in scenario["steps"]:
-                if step["has_auto_test"]:
-                    continue
-                step_text = step["text"]
-                step_text = step_text.strip()
-                if step_text in file_text:
-                    step["has_auto_test"] = True
-                else:
-                    for regex in substances_regexes:
-                        if re.match(regex, step_text):
-                            step["has_auto_test"] = True
-                            break
-    return feature_data
+        for auto_tests_step in auto_tests_folder["steps"]:
+            auto_tests_steps_object = AutoTestStep(keyword=STEP_TYPES_CODES[auto_tests_step["keyword"]],
+                                                   text=auto_tests_step["step"],
+                                                   version=version,
+                                                   autotests_folder_name=autotests_folder_name)
+            auto_tests_steps_object.project_files_ = files_objects
+            auto_tests_steps_objects.append(auto_tests_steps_object)
+
+    auto_tests_steps_objects = AutoTestStep.objects.bulk_create(auto_tests_steps_objects)
+    for auto_tests_steps_object in auto_tests_steps_objects:
+        auto_tests_steps_object.project_files.add(*auto_tests_steps_object.project_files_)
+    fetch_version_files_with_auto_test(version.id)
 
 
 def parse_feature_file(file_path):
@@ -471,15 +483,13 @@ def get_features(path):
                 feature_data["file_path"] = file_path
                 feature_data["file_name"] = filename
                 features.append(feature_data)
-
-            except Exception as e:
-                continue
+            except CompositeParserException as e:
+                raise Exception(get_parse_error_message(full_filename, e.errors[0]))
 
     return features
 
 
-def get_features_from_file(path, file_name, smart_mode, common_autotests_folder):
-    features = []
+def get_features_from_file(path, file_name):
     dirname = None
     full_filename = None
 
@@ -494,7 +504,6 @@ def get_features_from_file(path, file_name, smart_mode, common_autotests_folder)
             if full_filename_ == file_name:
                 dirname = dirname_
                 full_filename = full_filename_
-                dirnames = dirnames_
                 break
 
     filename, file_extension = os.path.splitext(full_filename)
@@ -502,12 +511,119 @@ def get_features_from_file(path, file_name, smart_mode, common_autotests_folder)
     feature_data = parse_feature_file(file_path)
     feature_data["file_path"] = file_path
     feature_data["file_name"] = filename
-
-
     return feature_data
 
 
-def get_updated_tests_objcts(features, version):
+def sync_features_with_file(features, version_id, cursor=None):
+    new_tests = []
+    new_steps = []
+    updated_tests = []
+    updated_steps = []
+    deleted_tests_ids = []
+    deleted_steps_ids = []
+
+    file = TestFile.objects.filter(file_path=features["file_path"]).prefetch_related(
+                    Prefetch(
+                        "tests",
+                        queryset=ProjectTest.objects.prefetch_related(
+                            Prefetch("steps", queryset=TestStep.objects.all())
+                        ),
+                    )
+                ).prefetch_related("auto_test_steps")
+
+    if file.exists():
+        file = file.first()
+    else:
+        version = ProjectVersion.objects.get(id=version_id)
+        file = TestFile(file_path=features["file_path"],
+                        project_version=version)
+        file.save()
+
+
+    for test in file.tests.all():
+        deleted_tests_ids.append(test.id)
+        for step in test.steps.all():
+            deleted_steps_ids.append(step.id)
+
+    for scenario in features["scenarios"]:
+        test_exists = True
+        test = file.tests.filter_locally(test_name=scenario["name"])
+        if test:
+            test = test[0]
+            deleted_tests_ids.remove(test.id)
+            if test.last_line != scenario["last_line"] or test.start_line != scenario["start_line"]:
+                test.last_line = scenario["last_line"]
+                test.start_line = scenario["start_line"]
+                updated_tests.append(test)
+        else:
+            test = ProjectTest(test_name=scenario["name"],
+                               last_line=scenario["last_line"],
+                               start_line=scenario["start_line"],
+                               file=file,
+                               )
+            new_tests.append(test)
+            test_exists = False
+
+        for step in scenario["steps"]:
+            keyword = STEP_TYPES_CODES.get(step["keywordType"], "2")
+            full_text = step["keyword"] + step["text"]
+            number = step["number"]
+            text_without_keyword = step["text"].strip()
+            has_auto_test = step.get("has_auto_test", False)
+            if test_exists:
+                steps = test.steps.filter_locally(keyword=keyword,
+                                                  text=full_text,
+                                                  text_without_keyword=text_without_keyword)
+
+                if steps:
+                    for step_ in steps:
+                        try:
+                            deleted_steps_ids.remove(step_.id)
+                            break
+                        except ValueError:
+                            pass
+
+                    if step_.number != number or step_.has_auto_test != has_auto_test:
+                        step_.number = number
+                        step_.has_auto_test = has_auto_test
+                        updated_steps.append(step_)
+                else:
+                    step_ = TestStep(
+                        keyword=keyword,
+                        project_test=test,
+                        text=full_text,
+                        has_auto_test=step.get("has_auto_test", False),
+                        text_without_keyword=text_without_keyword,
+                        number=number,
+                    )
+                    new_steps.append(step_)
+            else:
+                step_ = TestStep(
+                    keyword=keyword,
+                    project_test=test,
+                    text=full_text,
+                    has_auto_test=step.get("has_auto_test", False),
+                    text_without_keyword=text_without_keyword,
+                    number=number,
+                )
+                new_steps.append(step_)
+
+    if not cursor:
+        cursor = connection.cursor()
+    bulk_delete(ProjectTest, deleted_tests_ids, cursor)
+    bulk_delete(TestStep, deleted_steps_ids, cursor)
+    ProjectTest.objects.bulk_update(updated_tests, ["last_line", "start_line"])
+    TestStep.objects.bulk_update(updated_steps, ["number", "has_auto_test"])
+    ProjectTest.objects.bulk_create(new_tests)
+    TestStep.objects.bulk_create(new_steps)
+
+    return file
+
+
+
+
+
+def get_updated_tests_objects(features, version):
     new_test_files = []
     updated_project_tests = []
     new_project_tests = []
@@ -522,7 +638,7 @@ def get_updated_tests_objcts(features, version):
     }
 
     for feature in features:
-        for test_file_ in version.test_files:
+        for test_file_ in version.test_files.all():
             if test_file_.file_path == feature["file_path"]:
                 test_file = test_file_
                 break
@@ -554,12 +670,14 @@ def get_updated_tests_objcts(features, version):
                 full_text = step["keyword"] + step["text"]
                 step_ = project_test.steps.filter(keyword=keyword, text=full_text)
                 number = step["number"]
+                text_without_keyword = step["text"].strip()
                 if not step_.exists():
                     step_ = TestStep(
                         keyword=keyword,
                         project_test=project_test,
                         text=full_text,
                         has_auto_test=step.get("has_auto_test", False),
+                        text_without_keyword=text_without_keyword,
                         number=number,
                     )
                     new_test_steps.append(step_)
@@ -635,16 +753,16 @@ def get_deleted_tests_objects(features, version):
                 deleted_test_steps.append(step.id)
 
     for feature in features:
-        test_file = version.test_files.filter(file_path=feature["file_path"])
-        if test_file.exists():
+        test_file = version.test_files.filter_locally(file_path=feature["file_path"])
+        if test_file:
             test_file = test_file.first()
             deleted_test_files.remove(test_file.id)
         else:
             continue
         for scenario in feature["scenarios"]:
-            project_test = test_file.tests.filter(test_name=scenario["name"])
+            project_test = test_file.tests.filter_locally(test_name=scenario["name"])
 
-            if project_test.exists():
+            if project_test:
                 project_test = project_test.first()
                 deleted_project_tests.remove(project_test.id)
             else:
@@ -653,8 +771,8 @@ def get_deleted_tests_objects(features, version):
             for step in scenario["steps"]:
                 keyword = keywords.get(step["keywordType"], "2")
                 full_text = step["keyword"] + step["text"]
-                step_ = project_test.steps.filter(keyword=keyword, text=full_text)
-                if step_.exists():
+                step_ = project_test.steps.filter_locally(keyword=keyword, text=full_text)
+                if step_:
                     step_ = step_.first()
                     deleted_test_steps.remove(step_.id)
                 else:

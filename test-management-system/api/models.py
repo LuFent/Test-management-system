@@ -230,10 +230,26 @@ class AutoTestStep(models.Model):
         default=Keyword.UNKNOWN,
     )
 
+    version = models.ForeignKey(
+        ProjectVersion,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="auto_test_steps",
+        verbose_name="Step in auto test files",
+    )
+
     project_files = models.ManyToManyField(
         TestFile,
         related_name="auto_test_steps",
         verbose_name="Step in auto test files",
+    )
+
+    autotests_folder_name = models.CharField(
+        max_length=100,
+        verbose_name="Auto tests folder",
+        blank=True,
+        null=True
     )
 
     text = models.CharField(
@@ -244,5 +260,11 @@ class AutoTestStep(models.Model):
         default=False, verbose_name="Is this step common"
     )
     objects = CustomManager()
+
+    @property
+    def keyword_label(self):
+        return self.Keyword._value2member_map_[self.keyword].label
+
+
     def __str__(self):
         return f"Auto test -- {self.keyword} {self.text}"

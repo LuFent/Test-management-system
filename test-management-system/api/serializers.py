@@ -193,3 +193,9 @@ class FileNameAndTextSerializer(Serializer):
             raise ValidationError("Invalid file extension")
 
         return value
+
+
+class AutoTestStepSerializer(ModelSerializer):
+    class Meta:
+        model = AutoTestStep
+        fields = ["keyword_label", "text"]

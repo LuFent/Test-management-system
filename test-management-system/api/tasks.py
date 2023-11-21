@@ -1,11 +1,12 @@
 from test_management_system.celery import app
 from .models import ProjectVersion, TestFile, ProjectTest, TestStep, AutoTestStep
 import os
+from django.db import connection
 from shutil import rmtree
 from .tools import (
     clone_features,
     get_features,
-    get_updated_tests_objcts,
+    get_updated_tests_objects,
     get_new_tests_objects,
     reserve_repo,
     unreserve_repo,
@@ -20,7 +21,12 @@ from .tools import (
     get_commit_message,
     del_reserve_repo,
     fetch_version_files_with_auto_test,
-    STEP_TYPES_CODES
+    fetch_file_with_autotests,
+    get_autotest_updated_steps,
+    STEP_TYPES_CODES,
+    sync_features_with_file,
+    fetch_with_autotests,
+
 )
 from django.conf import settings
 from os.path import join
@@ -90,39 +96,8 @@ def create_version(repo_path, username, token, branch, commit, repo_url, version
     tests = ProjectTest.objects.bulk_create(new_project_tests)
     steps = TestStep.objects.bulk_create(new_test_steps)
 
-    auto_tests_steps_objects = []
     if smart_mode:
-        exclude_dirs = []
-        if common_autotests_folder:
-            exclude_dirs.append(common_autotests_folder)
-            common_autotests_steps = ccp_plugin.get_auto_test_steps_from_dir(common_autotests_folder)
-            common_autotests_steps_objects_ = []
-            for step in common_autotests_steps:
-                auto_step = AutoTestStep(keyword=STEP_TYPES_CODES[step["keyword"]],
-                                                           text=step["step"])
-                common_autotests_steps_objects_.append(auto_step)
-            common_autotests_steps_objects = AutoTestStep.objects.bulk_create(common_autotests_steps_objects_)
-            for common_autotests_steps_object in common_autotests_steps_objects:
-                common_autotests_steps_object.project_files.set(files)
-
-        auto_tests_folders = ccp_plugin.get_auto_test_steps_from_repo(repo_path, exclude_dirs)
-
-        for auto_tests_folder in auto_tests_folders:
-            files_objects = []
-            for file in files:
-                if Path(file.file_path).stem == auto_tests_folder["folder"]:
-                    files_objects.append(file)
-
-            for auto_tests_step in auto_tests_folder["steps"]:
-                auto_tests_steps_object = AutoTestStep(keyword=STEP_TYPES_CODES[auto_tests_step["keyword"]],
-                                                       text=auto_tests_step["step"])
-                auto_tests_steps_object.project_files_ = files_objects
-                auto_tests_steps_objects.append(auto_tests_steps_object)
-
-        auto_tests_steps_objects = AutoTestStep.objects.bulk_create(auto_tests_steps_objects)
-        for auto_tests_steps_object in auto_tests_steps_objects:
-            auto_tests_steps_object.project_files.add(*auto_tests_steps_object.project_files_)
-        fetch_version_files_with_auto_test(version_id)
+        fetch_with_autotests(common_autotests_folder, files, repo_path, version)
 
     version.error_message = None
     version.save()
@@ -188,23 +163,30 @@ def update_version(repo_path, username, token, branch, repo_url, version_id):
     version.save()
 
     try:
-        features = get_features(repo_path, smart_mode, common_autotests_folder)
-        (
-            updated_test_files,
-            new_project_tests,
-            updated_project_tests,
-            updated_test_steps,
-        ) = get_updated_tests_objcts(features, version)
+        features = get_features(repo_path)
     except Exception as e:
-        version.error_message = get_version_update_error("Something went wrong")
+        version.error_message = get_version_update_error(str(e))
         version.save()
         unreserve_repo(repo_path)
         return
 
-    TestFile.objects.bulk_create(updated_test_files)
-    ProjectTest.objects.bulk_create(new_project_tests)
-    ProjectTest.objects.bulk_update(updated_project_tests, ["last_line", "start_line"])
-    TestStep.objects.bulk_create(updated_test_steps)
+    files = []
+    cursor = connection.cursor()
+    for feature in features:
+        try:
+            test_file = sync_features_with_file(feature, version_id, cursor)
+            files.append(test_file)
+        except Exception:
+            pass
+
+    if smart_mode:
+        version.auto_test_steps.all().delete()
+        fetch_with_autotests(common_autotests_folder, files, repo_path, version)
+        for test_file in files:
+            fetch_file_with_autotests(test_file)
+            steps = get_autotest_updated_steps(test_file)
+            TestStep.objects.bulk_update(steps, ["has_auto_test"])
+
     version.error_message = None
     version.save()
     del_reserve_repo(repo_path)

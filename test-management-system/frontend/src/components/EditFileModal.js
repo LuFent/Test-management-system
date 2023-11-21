@@ -5,7 +5,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { StreamLanguage } from '@codemirror/language';
 import { gherkin } from '@codemirror/legacy-modes/mode/gherkin';
 import { indentUnit } from "@codemirror/language";
-
+import getAutoCompletion from "./AutoCompletion";
 
 function getCookie(name) {
   var cookieValue = null;
@@ -33,6 +33,7 @@ export default function EditFileModal({
   const [fileText, setFileText] = useState("");
   const [isFormAccepted, setIsFormAccepted] = useState(true);
   const [textAccepted, setTextAccepted] = useState(false);
+  const [autoTests, setAutoTests] = useState({});
   const [fileNameError, setFileNameError] = useState("");
   const [fileTextError, setFileTextError] = useState("");
   const [fileNameChanged, setFileNameChanged] = useState(false);
@@ -116,10 +117,21 @@ export default function EditFileModal({
     }.bind(this);
     xhr.send();
 
+    let xhr_ = new XMLHttpRequest();
+    const url_ = "/api/get_file_auto_tests/" + activeTestFileId + "/";
+    xhr_.open("GET", url_);
+    xhr_.setRequestHeader("X-CSRFToken", getCookie("csrftoken"));
+    xhr_.setRequestHeader("Content-Type", "application/json");
+
+    xhr_.onload = function () {
+      if (xhr_.status == 200) {
+        setAutoTests(JSON.parse(xhr_.responseText));
+      }
+    }.bind(this);
+    xhr_.send();
   }
   let textAreaElement = undefined;
   let fileNameElement = undefined;
-
 
   if (textAccepted) {
     textAreaElement = (
@@ -127,7 +139,7 @@ export default function EditFileModal({
           placeholder="File text"
           value={fileText}
           onChange={handleFileTextChange}
-          extensions={[StreamLanguage.define(gherkin), indentUnit.of("    ")]}
+          extensions={[getAutoCompletion(autoTests), StreamLanguage.define(gherkin), indentUnit.of("    ")]}
           scrollbarstyle={'simple'}
         />
       );
@@ -167,6 +179,8 @@ export default function EditFileModal({
       />
    )
   }
+
+  //////////////////
 
     return (
       <div className="file-action">
