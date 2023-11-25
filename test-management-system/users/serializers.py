@@ -1,11 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model, authenticate
-from django.contrib.auth.password_validation import (
-    validate_password,
-    NumericPasswordValidator,
-    CommonPasswordValidator,
-    MinimumLengthValidator,
-)
+import django.contrib.auth.password_validation as validators
 from django.core.exceptions import ValidationError
 
 UserModel = get_user_model()
@@ -15,29 +10,22 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserModel
         fields = "__all__"
-        extra_kwargs = {
-            "email": {
-                "error_messages": {
-                    "invalid": "Некорректный адрес",
-                }
-            },
-            "full_name": {
-                "error_messages": {
-                    "blank": "Не может быть пустым",
-                }
-            },
-        }
 
-    def validate_password(self, password):
-        errors = []
-        min_len = 8
-        if len(password) < min_len:
-            errors.append(f"Пароль не может быть короче {min_len} символов")
-        if password.isdigit():
-            errors.append("Пароль не может состоять только из цифр")
+    def validate(self, data):
+
+        password = data.get('password')
+
+        errors = dict()
+        try:
+            validators.validate_password(password=password)
+
+        except ValidationError as e:
+            errors['password'] = list(e.messages)[0]
 
         if errors:
-            raise ValidationError(errors)
+            raise serializers.ValidationError(errors)
+
+        return super(UserRegisterSerializer, self).validate(data)
 
     def create(self, clean_data):
         user = UserModel.objects.create_user(
@@ -47,7 +35,6 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         )
 
         return user
-
 
 class UserLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
