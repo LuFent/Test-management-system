@@ -26,6 +26,7 @@ from .tools import (
     STEP_TYPES_CODES,
     sync_features_with_file,
     fetch_with_autotests,
+    split_common_autotests_folder_filed
 
 )
 from django.conf import settings
@@ -50,12 +51,13 @@ def create_version(repo_path, username, token, branch, commit, repo_url, version
 
     smart_mode = project.smart_mode
     particular_dir = project.files_folder
-    common_autotests_folder = project.common_autotests_folder
+    common_autotests_folders = project.common_autotests_folders
 
-    if smart_mode and particular_dir and common_autotests_folder:
-        common_autotests_folder = get_common_folder_path(
+    if smart_mode and particular_dir and common_autotests_folders:
+        common_autotests_folders = [get_common_folder_path(
             repo_path, particular_dir, common_autotests_folder
-        )
+        ) for common_autotests_folder in split_common_autotests_folder_filed(common_autotests_folders)]
+
     try:
         status, data = clone_features(
             repo_url=repo_url,
@@ -97,7 +99,7 @@ def create_version(repo_path, username, token, branch, commit, repo_url, version
     steps = TestStep.objects.bulk_create(new_test_steps)
 
     if smart_mode:
-        fetch_with_autotests(common_autotests_folder, files, repo_path, version)
+        fetch_with_autotests(common_autotests_folders, files, repo_path, version)
 
     version.error_message = None
     version.save()
@@ -127,14 +129,13 @@ def update_version(repo_path, username, token, branch, repo_url, version_id):
     project = version.project
     smart_mode = project.smart_mode
     particular_dir = project.files_folder
-    common_autotests_folder = project.common_autotests_folder
+    common_autotests_folders = project.common_autotests_folders
 
-    if smart_mode and particular_dir and common_autotests_folder:
-        common_autotests_folder = join(
-            repo_path,
-            particular_dir,
-            common_autotests_folder,
-        )
+    if smart_mode and particular_dir and common_autotests_folders:
+        common_autotests_folders = [get_common_folder_path(
+            repo_path, particular_dir, common_autotests_folder
+        ) for common_autotests_folder in split_common_autotests_folder_filed(common_autotests_folders)]
+
     try:
         status, data = clone_features(
             repo_url=repo_url,
@@ -181,7 +182,7 @@ def update_version(repo_path, username, token, branch, repo_url, version_id):
 
     if smart_mode:
         version.auto_test_steps.all().delete()
-        fetch_with_autotests(common_autotests_folder, files, repo_path, version)
+        fetch_with_autotests(common_autotests_folders, files, repo_path, version)
         for test_file in files:
             fetch_file_with_autotests(test_file)
             steps = get_autotest_updated_steps(test_file)

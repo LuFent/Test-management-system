@@ -105,6 +105,13 @@ def shift(seq, n):
     return seq[n:] + seq[:n]
 
 
+def split_common_autotests_folder_filed(field_value):
+    separator = ","
+    folders = [x.strip() for x in field_value.split(separator)]
+    return folders
+
+
+
 def get_version_creation_error(error_message):
     message = f"""
     Couldn't create version due to:
@@ -253,62 +260,22 @@ def filter_queryset(queryset, **kwargs):
     return res
 
 
-def fetch_with_autotests(common_autotests_folder, files, repo_path, version):
+def fetch_with_autotests(common_autotests_folders, files, repo_path, version):
     auto_tests_steps_objects = []
     exclude_dirs = []
-    if common_autotests_folder:
-        exclude_dirs.append(common_autotests_folder)
-        common_autotests_steps = ccp_plugin.get_auto_test_steps_from_dir(common_autotests_folder)
+    if common_autotests_folders:
         common_autotests_steps_objects_ = []
-        for step in common_autotests_steps:
-            auto_step = AutoTestStep(keyword=STEP_TYPES_CODES[step["keyword"]],
-                                     text=step["step"],
-                                     is_common=True,
-                                     version=version)
-            common_autotests_steps_objects_.append(auto_step)
-        common_autotests_steps_objects = AutoTestStep.objects.bulk_create(common_autotests_steps_objects_)
-        for common_autotests_steps_object in common_autotests_steps_objects:
-            common_autotests_steps_object.project_files.set(files)
+        for common_autotests_folder in common_autotests_folders:
+            exclude_dirs.append(common_autotests_folder)
+            common_autotests_steps = ccp_plugin.get_auto_test_steps_from_dir(common_autotests_folder)
 
-    auto_tests_folders = ccp_plugin.get_auto_test_steps_from_repo(repo_path, exclude_dirs)
+            for step in common_autotests_steps:
+                auto_step = AutoTestStep(keyword=STEP_TYPES_CODES[step["keyword"]],
+                                         text=step["step"],
+                                         is_common=True,
+                                         version=version)
+                common_autotests_steps_objects_.append(auto_step)
 
-    for auto_tests_folder in auto_tests_folders:
-        files_objects = []
-        autotests_folder_name = None
-        for file in files:
-            if Path(file.file_path).stem == auto_tests_folder["folder"]:
-                files_objects.append(file)
-                autotests_folder_name = auto_tests_folder["folder"]
-
-        for auto_tests_step in auto_tests_folder["steps"]:
-            auto_tests_steps_object = AutoTestStep(keyword=STEP_TYPES_CODES[auto_tests_step["keyword"]],
-                                                   text=auto_tests_step["step"],
-                                                   version=version,
-                                                   autotests_folder_name=autotests_folder_name)
-            auto_tests_steps_object.project_files_ = files_objects
-            auto_tests_steps_objects.append(auto_tests_steps_object)
-
-    auto_tests_steps_objects = AutoTestStep.objects.bulk_create(auto_tests_steps_objects)
-    for auto_tests_steps_object in auto_tests_steps_objects:
-        auto_tests_steps_object.project_files.add(*auto_tests_steps_object.project_files_)
-    fetch_version_files_with_auto_test(version.id)
-
-
-def fetch_with_updated_autotests(common_autotests_folder, files, repo_path, version_id):
-    version = ProjectVersion.objects.filter(id=version_id).prefetch_related("auto_test_steps")
-
-    auto_tests_steps_objects = []
-    exclude_dirs = []
-    if common_autotests_folder:
-        exclude_dirs.append(common_autotests_folder)
-        common_autotests_steps = ccp_plugin.get_auto_test_steps_from_dir(common_autotests_folder)
-        common_autotests_steps_objects_ = []
-        for step in common_autotests_steps:
-            auto_step = AutoTestStep(keyword=STEP_TYPES_CODES[step["keyword"]],
-                                     text=step["step"],
-                                     is_common=True,
-                                     version=version)
-            common_autotests_steps_objects_.append(auto_step)
         common_autotests_steps_objects = AutoTestStep.objects.bulk_create(common_autotests_steps_objects_)
         for common_autotests_steps_object in common_autotests_steps_objects:
             common_autotests_steps_object.project_files.set(files)

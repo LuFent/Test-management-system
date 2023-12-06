@@ -367,18 +367,11 @@ class CreateFile(CreateAPIView):
         version = data["project_version"]
         project = version.project
         smart_mode = project.smart_mode
-        particular_dir = project.files_folder
-        common_autotests_folder = project.common_autotests_folder
 
         file_path = data["file_path"]
         file_text = data["file_text"]
         repo_path = data["repo_path"]
         file_name = data["file_name"]
-
-        if smart_mode and particular_dir and common_autotests_folder:
-            common_autotests_folder = get_common_folder_path(
-                repo_path, particular_dir, common_autotests_folder
-            )
 
         if os.path.isdir(file_path):
             os.remove(file_path)
@@ -478,8 +471,6 @@ class UpdateFile(APIView):
 
         project = version.project
         smart_mode = project.smart_mode
-        particular_dir = project.files_folder
-        common_autotests_folder = project.common_autotests_folder
 
         repo_path = get_repo_path(project.id, version.id)
         files_folder = os.path.join(repo_path, project.files_folder)

@@ -36,8 +36,8 @@ class Project(models.Model):
 
     smart_mode = models.BooleanField(default=False)
 
-    common_autotests_folder = models.CharField(
-        max_length=150, blank=True, null=True, verbose_name="Common autotests folder"
+    common_autotests_folders = models.CharField(
+        max_length=150, blank=True, null=True, verbose_name="Common autotests folders"
     )
 
     git_access_key = models.CharField(
