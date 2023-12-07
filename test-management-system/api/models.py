@@ -119,9 +119,16 @@ class TestFile(models.Model):
 
     manually_created = models.BooleanField(default=False)
     objects = CustomManager()
+
     @property
     def file_name(self):
         return os.path.splitext(ntpath.basename(self.file_path))[0]
+
+
+    @property
+    def file_name_with_ext(self):
+        return os.path.basename(self.file_path)
+
 
     class Meta:
         unique_together = (

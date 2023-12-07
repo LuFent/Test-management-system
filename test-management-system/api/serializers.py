@@ -204,4 +204,4 @@ class AutoTestStepSerializer(ModelSerializer):
 class FileNameSerializer(ModelSerializer):
     class Meta:
         model = TestFile
-        fields = ["file_name"]
+        fields = ["file_name_with_ext"]

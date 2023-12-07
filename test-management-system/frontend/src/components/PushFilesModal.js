@@ -38,7 +38,7 @@ export default function PushFilesModal(versionId) {
         let updatedFilesNames = []
         for(let fileIndex=0; fileIndex < data.length; fileIndex++){
               let updatedFile = data[fileIndex];
-              updatedFilesNames.push(updatedFile.file_name)
+              updatedFilesNames.push(updatedFile.file_name_with_ext)
            }
         setUpdatedFiles(updatedFilesNames);
         return
