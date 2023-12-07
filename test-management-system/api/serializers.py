@@ -199,3 +199,9 @@ class AutoTestStepSerializer(ModelSerializer):
     class Meta:
         model = AutoTestStep
         fields = ["keyword_label", "text"]
+
+
+class FileNameSerializer(ModelSerializer):
+    class Meta:
+        model = TestFile
+        fields = ["file_name"]

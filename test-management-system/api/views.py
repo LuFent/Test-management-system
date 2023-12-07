@@ -1,6 +1,7 @@
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework.views import APIView
+from rest_framework.generics import ListAPIView
 from .serializers import *
 from datetime import date
 from .models import *
@@ -23,11 +24,7 @@ from .tools import (
     get_repo_path,
     get_features_from_file,
     get_new_tests_objects,
-    get_common_folder_path,
     rename_file_hard,
-    get_updated_tests_objects,
-    get_deleted_tests_objects_from_file,
-    bulk_delete,
     check_for_similar_test_names,
     sync_features_with_file,
     get_autotest_updated_steps,
@@ -557,3 +554,13 @@ class GetTestText(APIView):
 
         data = {"text": test_text, "name": test.test_name}
         return Response(data, status=status.HTTP_200_OK)
+
+
+class GetUpdatedFiles(APIView):
+    def get(self, request, version_id):
+        version = get_object_or_404(ProjectVersion, id=version_id)
+        test_files = version.test_files.filter(manually_created=True)
+        serializer = FileNameSerializer(test_files, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+

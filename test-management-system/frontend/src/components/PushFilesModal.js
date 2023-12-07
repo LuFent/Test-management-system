@@ -18,10 +18,34 @@ function getCookie(name) {
 }
 
 export default function PushFilesModal(versionId) {
+
+  const [updatedFiles, setUpdatedFiles] = useState(undefined);
   const [isFormAccepted, setIsFormAccepted] = useState(false);
 
   const { pathname } = window.location;
   const paths = pathname.split("/").filter((entry) => entry !== "");
+
+  function openModal() {
+    let xhr = new XMLHttpRequest();
+    const url = "/api/get_updated_files/" + versionId.versionId + "/";
+    xhr.open("GET", url);
+    xhr.setRequestHeader("X-CSRFToken", getCookie("csrftoken"));
+    xhr.setRequestHeader("Content-Type", "application/json");
+
+    xhr.onload = function () {
+      if (xhr.status == 200) {
+        let data = JSON.parse(xhr.responseText);
+        let updatedFilesNames = []
+        for(let fileIndex=0; fileIndex < data.length; fileIndex++){
+              let updatedFile = data[fileIndex];
+              updatedFilesNames.push(updatedFile.file_name)
+           }
+        setUpdatedFiles(updatedFilesNames);
+        return
+      }
+    }.bind(this);
+    xhr.send();
+  }
 
   function pushFiles() {
     let xhr = new XMLHttpRequest();
@@ -41,6 +65,16 @@ export default function PushFilesModal(versionId) {
     data["version_id"] = versionId.versionId;
     xhr.send(JSON.stringify(data));
   }
+  let updatedFilesList = [];
+
+  if (updatedFiles){
+    for(let fileIndex=0; fileIndex < updatedFiles.length; fileIndex++){
+      let updatedFile = updatedFiles[fileIndex];
+      updatedFilesList.push(
+        <li key={fileIndex}>{ updatedFile }</li>
+      )
+    }
+  }
   if (isFormAccepted) {
     return (
       <div>
@@ -50,6 +84,7 @@ export default function PushFilesModal(versionId) {
           data-bs-toggle="modal"
           data-bs-target="#pushFiles"
           onClick={() => {
+            openModal();
             setIsFormAccepted(false);
           }}
         >
@@ -93,6 +128,10 @@ export default function PushFilesModal(versionId) {
           className="btn btn-outline-secondary"
           data-bs-toggle="modal"
           data-bs-target="#pushFiles"
+          onClick={() => {
+            openModal();
+            setIsFormAccepted(false);
+          }}
         >
           Push Files
         </button>
@@ -120,6 +159,10 @@ export default function PushFilesModal(versionId) {
               </div>
               <div className="modal-body">
               <p>This will push manually created files to remote repository</p>
+              <p>Files to be pushed:</p>
+              <ul>
+              {updatedFilesList}
+              </ul>
               </div>
               <div className="modal-footer">
                 <button

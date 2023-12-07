@@ -26,5 +26,6 @@ urlpatterns = [
     path("update_file/<file_id>/", UpdateFile.as_view(), name="update_file"),
     path("get_test_text/<test_id>/", GetTestText.as_view(), name="get_test_text"),
     path("get_file_auto_tests/<file_id>/", GetFileAutoSteps.as_view(), name="get_file_auto_tests"),
-    path("get_common_auto_tests/<version_id>/", GetCommonAutoSteps.as_view(), name="get_common_auto_tests")
+    path("get_common_auto_tests/<version_id>/", GetCommonAutoSteps.as_view(), name="get_common_auto_tests"),
+    path("get_updated_files/<version_id>/", GetUpdatedFiles.as_view(), name="get_updated_files")
 ]

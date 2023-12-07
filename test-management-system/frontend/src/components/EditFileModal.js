@@ -180,7 +180,6 @@ export default function EditFileModal({
    )
   }
 
-  //////////////////
 
     return (
       <div className="file-action">
